@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm install && npm run build --workspace=packages/shared && npm run build --workspace=apps/web",
+  "buildCommand": "cd apps/web && npx vite build",
   "outputDirectory": "apps/web/dist",
   "installCommand": "npm install",
   "framework": null,
