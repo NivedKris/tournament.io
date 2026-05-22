@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabaseAdmin } from '../lib/supabase';
-import type { UserRole } from '@tournament/shared';
+
+// Inlined so the API is self-contained (no cross-workspace import needed in prod)
+type UserRole = 'player' | 'admin';
 
 // Extend Express Request to carry user info
 declare global {
