@@ -10,6 +10,8 @@ import AuthCallbackPage from './pages/AuthCallbackPage';
 import CompleteProfilePage from './pages/CompleteProfilePage';
 import SuspendedPage from './pages/SuspendedPage';
 import HomePage from './pages/HomePage';
+import SquadBuilderPage from './pages/SquadBuilderPage';
+import PublicProfilePage from './pages/PublicProfilePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,11 +51,13 @@ export default function App() {
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/complete-profile" element={<CompleteProfilePage />} />
             <Route path="/suspended" element={<SuspendedPage />} />
+            <Route path="/profile/:claimId" element={<PublicProfilePage />} />
           </Route>
 
           {/* Protected routes */}
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/squad-builder" element={<SquadBuilderPage />} />
           </Route>
 
           {/* Fallback */}

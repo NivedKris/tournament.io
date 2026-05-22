@@ -5,6 +5,8 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 
 import authRouter from './routes/auth';
+import tournamentRouter from './routes/tournament';
+import squadRouter from './routes/squad';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -40,6 +42,8 @@ app.use(
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.use('/auth', authRouter);
+app.use('/tournament', tournamentRouter);
+app.use('/squad', squadRouter);
 
 // Health check
 app.get('/health', (_req, res) => {
