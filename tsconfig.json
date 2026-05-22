@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "lib": ["ES2020"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@tournament/shared": ["./packages/shared/src/index.ts"]
+    }
+  },
+  "include": ["api", "apps/api/src", "packages/shared/src"],
+  "exclude": ["node_modules", "apps/web"]
+}

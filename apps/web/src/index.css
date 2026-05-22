@@ -1,0 +1,514 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   MATCHUP — Apple-aesthetic dark design system
+   Pure black bg · SF Pro-inspired type · Surgical whitespace
+───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Fonts ────────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+/* ── Tokens ───────────────────────────────────────────────────────────────── */
+:root {
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Background layers */
+  --bg:           #000000;
+  --bg-1:         #0a0a0a;
+  --bg-2:         #111111;
+  --bg-3:         #1a1a1a;
+  --bg-4:         #222222;
+
+  /* Borders */
+  --border:       rgba(255, 255, 255, 0.08);
+  --border-md:    rgba(255, 255, 255, 0.12);
+  --border-hi:    rgba(255, 255, 255, 0.22);
+
+  /* Text */
+  --white:        #ffffff;
+  --gray-100:     #f5f5f7;   /* Apple's near-white */
+  --gray-300:     #a1a1a6;   /* Apple's secondary label */
+  --gray-500:     #6e6e73;   /* Apple's tertiary label */
+  --gray-700:     #3a3a3c;   /* Subtle dividers */
+
+  /* Accent — "UP" highlight colour: a refined warm white-gold */
+  --accent:       #f5f5f7;
+  --accent-up:    #a1a1a6;   /* The "UP" in MATCHUP is this toned colour */
+
+  /* Semantic */
+  --success:      #30d158;   /* Apple green */
+  --warning:      #ff9f0a;   /* Apple orange */
+  --danger:       #ff453a;   /* Apple red */
+  --admin:        #ff9f0a;
+
+  /* Geometry */
+  --r-sm:         8px;
+  --r:            12px;
+  --r-lg:         18px;
+  --r-xl:         28px;
+
+  /* Motion */
+  --ease:         cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --fast:         150ms;
+  --mid:          250ms;
+  --slow:         400ms;
+}
+
+/* ── Reset ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-family: var(--font);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--white);
+}
+
+p { line-height: 1.6; color: var(--gray-300); }
+a { color: var(--gray-100); text-decoration: none; }
+
+/* ── MATCHUP Wordmark ─────────────────────────────────────────────────────── */
+/*
+  Usage: <span class="wordmark"><span>MATCH</span><span class="up">UP</span></span>
+*/
+.wordmark {
+  font-size: inherit;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--white);
+}
+.wordmark .up {
+  color: var(--gray-500);
+  font-weight: 700;
+}
+
+/* ── Loading Screen ───────────────────────────────────────────────────────── */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100dvh;
+  gap: 20px;
+  background: var(--bg);
+}
+
+.loading-logo {
+  width: 52px;
+  height: 52px;
+  opacity: 0.9;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--bg-3);
+  border-top-color: var(--gray-300);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-label {
+  font-size: 0.8rem;
+  color: var(--gray-500);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── Login Page ───────────────────────────────────────────────────────────── */
+.login-page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+  animation: fadeUp var(--slow) var(--ease) both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Logo block */
+.login-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.login-logo-img {
+  width: 80px;
+  height: 80px;
+  /* Invert the white-bg logo to suit black bg */
+  filter: invert(1);
+  border-radius: 20px;
+}
+
+.login-wordmark {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.login-wordmark .up { color: var(--gray-500); }
+
+.login-tagline {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-align: center;
+  margin-top: -12px;
+}
+
+/* Sign-in block */
+.login-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.login-footer {
+  font-size: 0.75rem;
+  color: var(--gray-700);
+  text-align: center;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 13px 22px;
+  border-radius: var(--r);
+  font-family: var(--font);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  border: none;
+  transition: opacity var(--fast) var(--ease), transform var(--fast) var(--ease), background var(--fast) var(--ease);
+  white-space: nowrap;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:active:not(:disabled) { transform: scale(0.97); opacity: 0.85; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* White filled — primary CTA */
+.btn-primary {
+  background: var(--white);
+  color: var(--bg);
+}
+.btn-primary:hover:not(:disabled) { background: var(--gray-100); }
+
+/* Subtle filled — Google / secondary */
+.btn-google {
+  background: var(--bg-3);
+  color: var(--white);
+  border: 1px solid var(--border-md);
+  width: 100%;
+  padding: 14px 22px;
+}
+.btn-google:hover:not(:disabled) { background: var(--bg-4); border-color: var(--border-hi); }
+
+/* Ghost */
+.btn-secondary {
+  background: transparent;
+  color: var(--gray-300);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover:not(:disabled) { background: var(--bg-2); color: var(--white); }
+
+/* Danger */
+.btn-danger {
+  background: rgba(255, 69, 58, 0.12);
+  color: var(--danger);
+  border: 1px solid rgba(255, 69, 58, 0.2);
+}
+.btn-danger:hover:not(:disabled) { background: rgba(255, 69, 58, 0.18); }
+
+.btn-sm { padding: 8px 14px; font-size: 0.8125rem; border-radius: var(--r-sm); }
+.btn-full { width: 100%; }
+
+/* ── Forms ────────────────────────────────────────────────────────────────── */
+.profile-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.profile-form-title {
+  text-align: center;
+}
+.profile-form-title h1 {
+  font-size: 1.5rem;
+  margin-bottom: 6px;
+}
+.profile-form-title p {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--gray-300);
+  letter-spacing: 0.01em;
+}
+
+.form-input {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--white);
+  font-family: var(--font);
+  font-size: 0.9375rem;
+  font-weight: 400;
+  padding: 13px 16px;
+  width: 100%;
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.form-input::placeholder { color: var(--gray-700); }
+
+.form-input:focus {
+  border-color: var(--border-hi);
+  background: var(--bg-3);
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  line-height: 1.5;
+}
+
+.form-error {
+  font-size: 0.8125rem;
+  color: var(--danger);
+  background: rgba(255, 69, 58, 0.08);
+  border: 1px solid rgba(255, 69, 58, 0.15);
+  padding: 11px 14px;
+  border-radius: var(--r-sm);
+  line-height: 1.5;
+}
+
+/* ── Divider ──────────────────────────────────────────────────────────────── */
+.divider {
+  width: 100%;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── Navbar ───────────────────────────────────────────────────────────────── */
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 52px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-logo {
+  width: 26px;
+  height: 26px;
+  filter: invert(1);
+}
+
+.nav-wordmark {
+  font-size: 0.875rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.nav-wordmark .up { color: var(--gray-500); }
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.nav-display-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--white);
+}
+
+.nav-username {
+  font-size: 0.6875rem;
+  color: var(--gray-500);
+  letter-spacing: 0.01em;
+}
+
+/* ── Badges ───────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.badge-admin {
+  background: rgba(255, 159, 10, 0.12);
+  color: var(--admin);
+  border: 1px solid rgba(255, 159, 10, 0.25);
+}
+
+.badge-player {
+  background: var(--bg-3);
+  color: var(--gray-300);
+  border: 1px solid var(--border);
+}
+
+/* ── Home / Main layout ───────────────────────────────────────────────────── */
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.page-content {
+  flex: 1;
+  max-width: 980px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 48px 24px;
+}
+
+.home-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 80px 0 60px;
+}
+
+.home-hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--white);
+}
+
+.home-hero p {
+  font-size: 1rem;
+  color: var(--gray-500);
+  max-width: 400px;
+}
+
+/* ── Suspended Page ───────────────────────────────────────────────────────── */
+.suspended-page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.suspended-card {
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.suspended-icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.suspended-card h1 {
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.suspended-card p {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+  line-height: 1.65;
+}
+
+/* ── Utilities ────────────────────────────────────────────────────────────── */
+.text-center { text-align: center; }
+.text-muted   { color: var(--gray-500); }
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .navbar { padding: 0 16px; }
+  .nav-user-info { display: none; }
+  .page-content { padding: 32px 16px; }
+}
