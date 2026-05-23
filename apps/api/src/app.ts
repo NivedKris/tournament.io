@@ -10,6 +10,7 @@ import tournamentRouter from './routes/tournament';
 import squadRouter from './routes/squad';
 import matchRouter from './routes/match';
 import uploadRouter from './routes/upload';
+import disputeRouter from './routes/dispute';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -52,6 +53,7 @@ app.use('/auth', authRouter);
 app.use('/tournament', tournamentRouter);
 app.use('/squad', squadRouter);
 app.use('/matches', matchRouter);
+app.use('/matches', disputeRouter);
 app.use('/upload', uploadRouter);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 

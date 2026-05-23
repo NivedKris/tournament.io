@@ -45,7 +45,7 @@ function isParticipant(match: any, userId: string): boolean {
 }
 
 /** After verifying a match, apply all post-match consequences */
-async function resolveAfterVerified(matchId: string) {
+export async function resolveAfterVerified(matchId: string) {
   const { data: match } = await supabaseAdmin
     .from('matches').select(MATCH_SELECT).eq('id', matchId).single();
   if (!match) return;
@@ -190,7 +190,18 @@ router.get('/:id', verifySession, requireActive, async (req: Request, res: Respo
     .select('*, player:players(*)')
     .eq('match_id', match.id);
 
-  return res.json({ success: true, data: { ...match, events: events || [] } });
+  let dispute = null;
+  if (match.status === 'disputed') {
+    const { data } = await supabaseAdmin
+      .from('disputes')
+      .select('*, raised_by_user:users!disputes_raised_by_fkey(username, display_name)')
+      .eq('match_id', match.id)
+      .eq('status', 'open')
+      .maybeSingle();
+    dispute = data;
+  }
+
+  return res.json({ success: true, data: { ...match, events: events || [], dispute } });
 });
 
 // ─── POST /matches/:id/submit-score ──────────────────────────────────────────

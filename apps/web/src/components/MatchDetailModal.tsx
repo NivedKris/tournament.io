@@ -138,6 +138,15 @@ export default function MatchDetailModal({
   const [adminHomePens, setAdminHomePens] = useState('');
   const [adminAwayPens, setAdminAwayPens] = useState('');
 
+  // Dispute form state
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [disputeComment, setDisputeComment] = useState('');
+  const [resolutionComment, setResolutionComment] = useState('');
+
+  // Chat file upload states
+  const [chatAttachmentUrl, setChatAttachmentUrl] = useState('');
+  const [isUploadingChat, setIsUploadingChat] = useState(false);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Load match details
@@ -173,13 +182,14 @@ export default function MatchDetailModal({
     });
   }, [matchId]);
 
-  // Chat polling (every 3 seconds)
+  // Chat polling (every 6 seconds, only when activeTab is chat)
   useEffect(() => {
+    if (activeTab !== 'chat') return;
     const interval = setInterval(() => {
       loadMessages();
-    }, 3000);
+    }, 6000);
     return () => clearInterval(interval);
-  }, [matchId]);
+  }, [matchId, activeTab]);
 
   // Scroll to bottom on new messages or tab switch
   useEffect(() => {
@@ -355,15 +365,46 @@ export default function MatchDetailModal({
     if (!chatInput.trim()) return;
 
     try {
-      const res = await api.post(`/matches/${matchId}/messages`, {
-        body: chatInput.trim(),
-      });
+      const payload: any = { body: chatInput.trim() };
+      if (chatAttachmentUrl) {
+        payload.attachment_url = chatAttachmentUrl;
+      }
+      const res = await api.post(`/matches/${matchId}/messages`, payload);
       if (res.data.success) {
         setMessages((prev) => [...prev, res.data.data]);
         setChatInput('');
+        setChatAttachmentUrl('');
       }
     } catch (err) {
       console.error('Failed to send message:', err);
+    }
+  };
+
+  // Handle uploading image inside chat
+  const handleChatFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingChat(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (res.data.success && res.data.data?.url) {
+        setChatAttachmentUrl(res.data.data.url);
+      } else {
+        setError(res.data.error || 'Failed to upload attachment');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Failed to upload attachment');
+    } finally {
+      setIsUploadingChat(false);
     }
   };
 
@@ -422,6 +463,110 @@ export default function MatchDetailModal({
     }
   };
 
+  // Dispute score submission
+  const handleDisputeScore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!disputeComment.trim()) {
+      setError('Please enter a comment explaining the reason for the dispute.');
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const res = await api.post(`/matches/${matchId}/dispute`, {
+        comment: disputeComment.trim()
+      });
+      if (res.data.success) {
+        setShowDisputeForm(false);
+        setDisputeComment('');
+        await loadMatchDetails();
+        onRefresh();
+      } else {
+        setError(res.data.error || 'Failed to submit dispute');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to submit dispute');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Withdraw active dispute
+  const handleWithdrawDispute = async () => {
+    if (!confirm('Are you sure you want to withdraw this dispute and verify the opponent\'s submitted score?')) return;
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const res = await api.post(`/matches/${matchId}/withdraw-dispute`);
+      if (res.data.success) {
+        await loadMatchDetails();
+        onRefresh();
+      } else {
+        setError(res.data.error || 'Failed to withdraw dispute');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to withdraw dispute');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Admin Resolve Dispute
+  const handleAdminResolveDispute = async (action: 'confirm' | 'reset' | 'override') => {
+    if (action === 'reset') {
+      if (!confirm('Are you sure you want to reset this match to scheduled state? All scores and events will be deleted.')) return;
+    } else if (action === 'confirm') {
+      if (!confirm('Are you sure you want to confirm the originally submitted score and events?')) return;
+    }
+
+    setError(null);
+    setIsSubmitting(true);
+
+    const payload: any = { action, comment: resolutionComment.trim() };
+
+    if (action === 'override') {
+      const hs = parseInt(adminHomeScore);
+      const as_ = parseInt(adminAwayScore);
+      if (isNaN(hs) || isNaN(as_)) {
+        setError('Override scores must be valid integers.');
+        setIsSubmitting(false);
+        return;
+      }
+      payload.home_score = hs;
+      payload.away_score = as_;
+
+      if (hs === as_ && (match.stage === 'pre_qual' || match.stage === 'knockout')) {
+        const hp = parseInt(adminHomePens);
+        const ap = parseInt(adminAwayPens);
+        if (isNaN(hp) || isNaN(ap) || hp === ap) {
+          setError('Valid distinct penalty scores are required for draws in this stage.');
+          setIsSubmitting(false);
+          return;
+        }
+        payload.home_pens = hp;
+        payload.away_pens = ap;
+      }
+
+      const validEvents = adminEvents.filter(e => e.claim_id && e.player_id);
+      payload.events = validEvents;
+    }
+
+    try {
+      const res = await api.post(`/matches/admin/${matchId}/resolve-dispute`, payload);
+      if (res.data.success) {
+        setResolutionComment('');
+        await loadMatchDetails();
+        onRefresh();
+      } else {
+        setError(res.data.error || 'Failed to resolve dispute');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to resolve dispute');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const getStageLabel = () => {
     if (match.stage === 'pre_qual') return 'Pre-Qualification';
     if (match.stage === 'group') return `Group Stage - Group ${match.group_name}`;
@@ -471,6 +616,35 @@ export default function MatchDetailModal({
         {activeTab === 'match' && (
           <div className="modal-tab-content">
             
+            {match.status === 'disputed' && (
+              <div className="info-banner-section dispute-banner" style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', color: '#f87171', padding: '16px', borderRadius: '12px', marginBottom: '20px' }}>
+                <h5 style={{ color: '#ef4444', fontWeight: '700', fontSize: '1rem', margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1.2rem' }}>⚠️</span> Match Under Dispute
+                </h5>
+                <p style={{ margin: 0, fontSize: '0.875rem', lineHeight: '1.4', color: 'rgba(255,255,255,0.75)' }}>
+                  A dispute was raised by <strong>{match.dispute?.raised_by_user?.display_name || match.dispute?.raised_by_user?.username || 'the opponent'}</strong>:
+                </p>
+                <p style={{ margin: '8px 0 0 0', padding: '10px 12px', background: 'rgba(0,0,0,0.2)', borderLeft: '3px solid #ef4444', borderRadius: '4px', fontStyle: 'italic', fontSize: '0.85rem', color: '#fff' }}>
+                  "{match.dispute?.comment || 'No reason provided.'}"
+                </p>
+                <p style={{ margin: '10px 0 0 0', fontSize: '0.78rem', color: 'rgba(255,255,255,0.45)' }}>
+                  Please coordinate in the <strong>Match Chat</strong> tab to upload evidence. An admin will arbitrate shortly.
+                </p>
+                
+                {/* Withdraw dispute option for the raiser */}
+                {match.dispute?.raised_by === currentUserId && (
+                  <button
+                    className="btn btn-secondary btn-sm mt-3"
+                    style={{ marginTop: '12px', borderColor: 'rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: '0.78rem', padding: '6px 12px', cursor: 'pointer' }}
+                    onClick={handleWithdrawDispute}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Withdrawing...' : 'Withdraw Dispute & Confirm Original Score'}
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Scoreboard Graphic */}
             <div className="scoreboard-container">
               {/* Home Team */}
@@ -827,191 +1001,428 @@ export default function MatchDetailModal({
             {showConfirmationBox && (
               <div className="action-form-section confirmation-section">
                 <h5>Verify Score</h5>
-                <p className="subtitle">
-                  Opponent submitted score: <strong>{match.home_score} – {match.away_score}</strong>
-                  {match.home_pens !== null && (
-                    <span> ({match.home_pens} – {match.away_pens} pens)</span>
-                  )}
-                  . Please verify if this matches your played game result.
-                </p>
-                <div className="drawer-actions mt-4">
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => alert('Dispute feature will be implemented in Phase 4.')}
-                    disabled={isSubmitting}
-                  >
-                    Dispute Score
-                  </button>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleConfirmScore}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? 'Confirming...' : 'Confirm Score'}
-                  </button>
-                </div>
+                {showDisputeForm ? (
+                  <form onSubmit={handleDisputeScore} className="mt-4">
+                    <p className="subtitle">
+                      Explain the reason for disputing the submitted score of <strong>{match.home_score} – {match.away_score}</strong>:
+                    </p>
+                    <div className="form-group mt-2">
+                      <textarea
+                        className="form-input"
+                        style={{ width: '100%', minHeight: '80px', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '10px', borderRadius: '6px', fontSize: '0.875rem', resize: 'vertical' }}
+                        placeholder="e.g. The opponent submitted an incorrect score, or uploaded the wrong screenshot..."
+                        value={disputeComment}
+                        onChange={(e) => setDisputeComment(e.target.value)}
+                        required
+                        maxLength={500}
+                      />
+                    </div>
+                    <div className="drawer-actions mt-4">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => { setShowDisputeForm(false); setDisputeComment(''); }}
+                        disabled={isSubmitting}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-danger btn-sm"
+                        style={{ background: '#ef4444', borderColor: '#ef4444', color: '#fff' }}
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? 'Submitting Dispute...' : 'File Dispute'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <p className="subtitle">
+                      Opponent submitted score: <strong>{match.home_score} – {match.away_score}</strong>
+                      {match.home_pens !== null && (
+                        <span> ({match.home_pens} – {match.away_pens} pens)</span>
+                      )}
+                      . Please verify if this matches your played game result.
+                    </p>
+                    <div className="drawer-actions mt-4">
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setShowDisputeForm(true)}
+                        disabled={isSubmitting}
+                      >
+                        Dispute Score
+                      </button>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={handleConfirmScore}
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? 'Confirming...' : 'Confirm Score'}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
-            {/* Admin Override Section */}
+            {/* Admin Override & Arbitration Section */}
             {isAdmin && (
-              <div className="admin-actions-section mt-8 pt-6 border-t">
-                <h5 className="text-warning">Admin Override Panel</h5>
-                
-                <form onSubmit={handleAdminVerify} className="submit-score-form mt-4">
-                  <div className="score-inputs-row">
-                    <div className="form-group flex-1">
-                      <label>Force Home Score</label>
-                      <input
-                        type="number"
-                        min="0"
-                        className="form-input text-center font-mono"
-                        placeholder={match.home_score?.toString() || '0'}
-                        value={adminHomeScore}
-                        onChange={(e) => setAdminHomeScore(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group flex-1">
-                      <label>Force Away Score</label>
-                      <input
-                        type="number"
-                        min="0"
-                        className="form-input text-center font-mono"
-                        placeholder={match.away_score?.toString() || '0'}
-                        value={adminAwayScore}
-                        onChange={(e) => setAdminAwayScore(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
+              <div className="admin-actions-section mt-8 pt-6 border-t" style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                {match.status === 'disputed' ? (
+                  <>
+                    <h5 style={{ color: '#fbbf24', fontWeight: '700', fontSize: '1rem', marginBottom: '8px' }}>Admin Dispute Arbitration</h5>
+                    <p className="subtitle" style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.6)', marginBottom: '16px' }}>
+                      Review evidence, discuss with participants in chat, and resolve the dispute.
+                    </p>
 
-                  {adminHomeScore !== '' &&
-                    adminAwayScore !== '' &&
-                    adminHomeScore === adminAwayScore &&
-                    (match.stage === 'pre_qual' || match.stage === 'knockout') && (
-                      <div className="score-inputs-row mt-2">
+                    <div className="form-group mb-4" style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px', color: 'rgba(255,255,255,0.8)' }}>
+                        Resolution Comments (Will be logged on the dispute record)
+                      </label>
+                      <textarea
+                        className="form-input"
+                        style={{ width: '100%', minHeight: '60px', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px', borderRadius: '6px', fontSize: '0.85rem' }}
+                        placeholder="e.g. Discussed in chat, corrected home score, or confirmed submitted score..."
+                        value={resolutionComment}
+                        onChange={(e) => setResolutionComment(e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div className="drawer-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm flex-1"
+                          onClick={() => handleAdminResolveDispute('confirm')}
+                          disabled={isSubmitting}
+                        >
+                          Confirm Submitted Score
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm flex-1"
+                          style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#ef4444', background: 'transparent' }}
+                          onClick={() => handleAdminResolveDispute('reset')}
+                          disabled={isSubmitting}
+                        >
+                          Reset Match (Wipe & Replay)
+                        </button>
+                      </div>
+
+                      <div style={{ border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px', padding: '14px', background: 'rgba(255,255,255,0.01)', marginTop: '6px' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#fbbf24', display: 'block', marginBottom: '12px' }}>
+                          Option 3: Override Score & Player Stats
+                        </span>
+
+                        <div className="score-inputs-row">
+                          <div className="form-group flex-1">
+                            <label>Override Home Score</label>
+                            <input
+                              type="number"
+                              min="0"
+                              className="form-input text-center font-mono"
+                              placeholder="0"
+                              value={adminHomeScore}
+                              onChange={(e) => setAdminHomeScore(e.target.value)}
+                            />
+                          </div>
+                          <div className="form-group flex-1">
+                            <label>Override Away Score</label>
+                            <input
+                              type="number"
+                              min="0"
+                              className="form-input text-center font-mono"
+                              placeholder="0"
+                              value={adminAwayScore}
+                              onChange={(e) => setAdminAwayScore(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        {adminHomeScore !== '' &&
+                          adminAwayScore !== '' &&
+                          adminHomeScore === adminAwayScore &&
+                          (match.stage === 'pre_qual' || match.stage === 'knockout') && (
+                            <div className="score-inputs-row mt-2" style={{ marginTop: '8px' }}>
+                              <div className="form-group flex-1">
+                                <label>Home Pens</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  className="form-input text-center font-mono"
+                                  value={adminHomePens}
+                                  onChange={(e) => setAdminHomePens(e.target.value)}
+                                />
+                              </div>
+                              <div className="form-group flex-1">
+                                <label>Away Pens</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  className="form-input text-center font-mono"
+                                  value={adminAwayPens}
+                                  onChange={(e) => setAdminAwayPens(e.target.value)}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                        {/* Admin Match Events Override */}
+                        <div className="form-group mt-4" style={{ marginTop: '12px' }}>
+                          <label className="block text-sm font-semibold mb-2" style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', fontWeight: '600', color: 'rgba(255,255,255,0.7)' }}>
+                            Scorer / Assister Events
+                          </label>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {adminEvents.map((event, index) => (
+                              <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <select
+                                  value={event.claim_id}
+                                  onChange={(e) => {
+                                    const updated = [...adminEvents];
+                                    updated[index].claim_id = e.target.value;
+                                    updated[index].player_id = 0;
+                                    setAdminEvents(updated);
+                                  }}
+                                  className="form-input"
+                                  style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
+                                  required
+                                >
+                                  <option value="">Select Team</option>
+                                  {match.home_claim && <option value={match.home_claim_id}>{match.home_claim.nations?.name} (Home)</option>}
+                                  {match.away_claim && <option value={match.away_claim_id}>{match.away_claim.nations?.name} (Away)</option>}
+                                </select>
+
+                                <select
+                                  value={event.event_type}
+                                  onChange={(e) => {
+                                    const updated = [...adminEvents];
+                                    updated[index].event_type = e.target.value as 'goal' | 'assist';
+                                    setAdminEvents(updated);
+                                  }}
+                                  className="form-input"
+                                  style={{ width: '90px', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
+                                  required
+                                >
+                                  <option value="goal">Goal ⚽</option>
+                                  <option value="assist">Assist 👟</option>
+                                </select>
+
+                                <select
+                                  value={event.player_id || ''}
+                                  onChange={(e) => {
+                                    const updated = [...adminEvents];
+                                    updated[index].player_id = parseInt(e.target.value);
+                                    setAdminEvents(updated);
+                                  }}
+                                  className="form-input"
+                                  style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
+                                  required
+                                  disabled={!event.claim_id}
+                                >
+                                  <option value="">Select Player</option>
+                                  {(event.claim_id === match.home_claim_id ? homeSquadPlayers : awaySquadPlayers).map((p: any) => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.name} ({p.overall})
+                                    </option>
+                                  ))}
+                                </select>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAdminEvents(adminEvents.filter((_, i) => i !== index));
+                                  }}
+                                  className="btn btn-danger"
+                                  style={{ padding: '4px 8px', borderRadius: '4px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer' }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setAdminEvents([...adminEvents, { claim_id: '', player_id: 0, event_type: 'goal' }])}
+                            className="btn btn-secondary mt-2"
+                            style={{ padding: '6px 12px', fontSize: '0.85rem', marginTop: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', cursor: 'pointer' }}
+                          >
+                            + Add Goal/Assist Event
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-primary w-full mt-4"
+                          style={{ marginTop: '16px', width: '100%', background: '#fbbf24', borderColor: '#fbbf24', color: '#000' }}
+                          onClick={() => handleAdminResolveDispute('override')}
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? 'Submitting Override...' : 'Apply Score Override & Resolve'}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h5 className="text-warning">Admin Override Panel</h5>
+                    
+                    <form onSubmit={handleAdminVerify} className="submit-score-form mt-4">
+                      <div className="score-inputs-row">
                         <div className="form-group flex-1">
-                          <label>Home Pens</label>
+                          <label>Force Home Score</label>
                           <input
                             type="number"
                             min="0"
                             className="form-input text-center font-mono"
-                            value={adminHomePens}
-                            onChange={(e) => setAdminHomePens(e.target.value)}
+                            placeholder={match.home_score?.toString() || '0'}
+                            value={adminHomeScore}
+                            onChange={(e) => setAdminHomeScore(e.target.value)}
                             required
                           />
                         </div>
                         <div className="form-group flex-1">
-                          <label>Away Pens</label>
+                          <label>Force Away Score</label>
                           <input
                             type="number"
                             min="0"
                             className="form-input text-center font-mono"
-                            value={adminAwayPens}
-                            onChange={(e) => setAdminAwayPens(e.target.value)}
+                            placeholder={match.away_score?.toString() || '0'}
+                            value={adminAwayScore}
+                            onChange={(e) => setAdminAwayScore(e.target.value)}
                             required
                           />
                         </div>
                       </div>
-                    )}
 
-                  {/* Admin Match Events */}
-                  <div className="form-group mt-4" style={{ marginTop: '16px' }}>
-                    <label className="block text-sm font-semibold mb-2" style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600', color: '#fbbf24' }}>
-                      Force Registered Goals & Assists
-                    </label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {adminEvents.map((event, index) => (
-                        <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                          <select
-                            value={event.claim_id}
-                            onChange={(e) => {
-                              const updated = [...adminEvents];
-                              updated[index].claim_id = e.target.value;
-                              updated[index].player_id = 0;
-                              setAdminEvents(updated);
-                            }}
-                            className="form-input"
-                            style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
-                            required
-                          >
-                            <option value="">Select Team</option>
-                            {match.home_claim && <option value={match.home_claim_id}>{match.home_claim.nations?.name} (Home)</option>}
-                            {match.away_claim && <option value={match.away_claim_id}>{match.away_claim.nations?.name} (Away)</option>}
-                          </select>
+                      {adminHomeScore !== '' &&
+                        adminAwayScore !== '' &&
+                        adminHomeScore === adminAwayScore &&
+                        (match.stage === 'pre_qual' || match.stage === 'knockout') && (
+                          <div className="score-inputs-row mt-2">
+                            <div className="form-group flex-1">
+                              <label>Home Pens</label>
+                              <input
+                                type="number"
+                                min="0"
+                                className="form-input text-center font-mono"
+                                value={adminHomePens}
+                                onChange={(e) => setAdminHomePens(e.target.value)}
+                                required
+                              />
+                            </div>
+                            <div className="form-group flex-1">
+                              <label>Away Pens</label>
+                              <input
+                                type="number"
+                                min="0"
+                                className="form-input text-center font-mono"
+                                value={adminAwayPens}
+                                onChange={(e) => setAdminAwayPens(e.target.value)}
+                                required
+                              />
+                            </div>
+                          </div>
+                        )}
 
-                          <select
-                            value={event.event_type}
-                            onChange={(e) => {
-                              const updated = [...adminEvents];
-                              updated[index].event_type = e.target.value as 'goal' | 'assist';
-                              setAdminEvents(updated);
-                            }}
-                            className="form-input"
-                            style={{ width: '90px', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
-                            required
-                          >
-                            <option value="goal">Goal ⚽</option>
-                            <option value="assist">Assist 👟</option>
-                          </select>
+                      {/* Admin Match Events */}
+                      <div className="form-group mt-4" style={{ marginTop: '16px' }}>
+                        <label className="block text-sm font-semibold mb-2" style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600', color: '#fbbf24' }}>
+                          Force Registered Goals & Assists
+                        </label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {adminEvents.map((event, index) => (
+                            <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                              <select
+                                  value={event.claim_id}
+                                  onChange={(e) => {
+                                    const updated = [...adminEvents];
+                                    updated[index].claim_id = e.target.value;
+                                    updated[index].player_id = 0;
+                                    setAdminEvents(updated);
+                                  }}
+                                  className="form-input"
+                                  style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
+                                  required
+                                >
+                                  <option value="">Select Team</option>
+                                  {match.home_claim && <option value={match.home_claim_id}>{match.home_claim.nations?.name} (Home)</option>}
+                                  {match.away_claim && <option value={match.away_claim_id}>{match.away_claim.nations?.name} (Away)</option>}
+                                </select>
 
-                          <select
-                            value={event.player_id || ''}
-                            onChange={(e) => {
-                              const updated = [...adminEvents];
-                              updated[index].player_id = parseInt(e.target.value);
-                              setAdminEvents(updated);
-                            }}
-                            className="form-input"
-                            style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
-                            required
-                            disabled={!event.claim_id}
-                          >
-                            <option value="">Select Player</option>
-                            {(event.claim_id === match.home_claim_id ? homeSquadPlayers : awaySquadPlayers).map((p: any) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name} ({p.overall})
-                              </option>
-                            ))}
-                          </select>
+                                <select
+                                  value={event.event_type}
+                                  onChange={(e) => {
+                                    const updated = [...adminEvents];
+                                    updated[index].event_type = e.target.value as 'goal' | 'assist';
+                                    setAdminEvents(updated);
+                                  }}
+                                  className="form-input"
+                                  style={{ width: '90px', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
+                                  required
+                                >
+                                  <option value="goal">Goal ⚽</option>
+                                  <option value="assist">Assist 👟</option>
+                                </select>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAdminEvents(adminEvents.filter((_, i) => i !== index));
-                            }}
-                            className="btn btn-danger"
-                            style={{ padding: '4px 8px', borderRadius: '4px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer' }}
-                          >
-                            ✕
-                          </button>
+                                <select
+                                  value={event.player_id || ''}
+                                  onChange={(e) => {
+                                    const updated = [...adminEvents];
+                                    updated[index].player_id = parseInt(e.target.value);
+                                    setAdminEvents(updated);
+                                  }}
+                                  className="form-input"
+                                  style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
+                                  required
+                                  disabled={!event.claim_id}
+                                >
+                                  <option value="">Select Player</option>
+                                  {(event.claim_id === match.home_claim_id ? homeSquadPlayers : awaySquadPlayers).map((p: any) => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.name} ({p.overall})
+                                    </option>
+                                  ))}
+                                </select>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAdminEvents(adminEvents.filter((_, i) => i !== index));
+                                }}
+                                className="btn btn-danger"
+                                style={{ padding: '4px 8px', borderRadius: '4px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer' }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setAdminEvents([...adminEvents, { claim_id: '', player_id: 0, event_type: 'goal' }])}
-                      className="btn btn-secondary mt-2"
-                      style={{ padding: '6px 12px', fontSize: '0.85rem', marginTop: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', cursor: 'pointer' }}
-                    >
-                      + Add Goal/Assist Event
-                    </button>
-                  </div>
+                        <button
+                          type="button"
+                          onClick={() => setAdminEvents([...adminEvents, { claim_id: '', player_id: 0, event_type: 'goal' }])}
+                          className="btn btn-secondary mt-2"
+                          style={{ padding: '6px 12px', fontSize: '0.85rem', marginTop: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', cursor: 'pointer' }}
+                        >
+                          + Add Goal/Assist Event
+                        </button>
+                      </div>
 
-                  <div className="flex gap-4 mt-4">
-                    <button
-                      type="button"
-                      className="btn btn-secondary flex-1"
-                      onClick={handleAdminReset}
-                    >
-                      Reset Match State
-                    </button>
-                    <button type="submit" className="btn btn-primary flex-1">
-                      Force Verify Match
-                    </button>
-                  </div>
-                </form>
+                      <div className="flex gap-4 mt-4">
+                        <button
+                          type="button"
+                          className="btn btn-secondary flex-1"
+                          onClick={handleAdminReset}
+                        >
+                          Reset Match State
+                        </button>
+                        <button type="submit" className="btn btn-primary flex-1">
+                          Force Verify Match
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                )}
               </div>
             )}
 
@@ -1044,6 +1455,16 @@ export default function MatchDetailModal({
                           <span className="chat-sender-label">{senderName}</span>
                         )}
                         <p className="chat-message-body">{msg.body}</p>
+                        {msg.attachment_url && (
+                          <div className="chat-message-attachment" style={{ marginTop: '6px', marginBottom: '4px' }}>
+                            <img
+                              src={msg.attachment_url}
+                              alt="Attachment"
+                              style={{ maxWidth: '180px', maxHeight: '180px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', display: 'block' }}
+                              onClick={() => window.open(msg.attachment_url, '_blank')}
+                            />
+                          </div>
+                        )}
                         <span className="chat-timestamp">
                           {new Date(msg.created_at).toLocaleTimeString([], {
                             hour: '2-digit',
@@ -1058,8 +1479,56 @@ export default function MatchDetailModal({
               <div ref={chatEndRef} />
             </div>
 
+            {/* Attachment preview if uploaded */}
+            {chatAttachmentUrl && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '6px 12px', borderTop: '1px solid rgba(255,255,255,0.05)', fontSize: '0.8rem' }}>
+                <span style={{ color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontSize: '0.65rem', fontWeight: '700', letterSpacing: '0.05em' }}>Attachment:</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px', color: '#10b981' }}>{chatAttachmentUrl.split('/').pop()}</span>
+                <button
+                  type="button"
+                  style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0 4px', fontSize: '0.9rem' }}
+                  onClick={() => setChatAttachmentUrl('')}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             {/* Send box */}
-            <form onSubmit={handleSendMessage} className="chat-input-bar">
+            <form onSubmit={handleSendMessage} className="chat-input-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {match?.status === 'disputed' && (
+                <div className="chat-file-upload-wrapper" style={{ position: 'relative' }}>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      cursor: isUploadingChat ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      color: chatAttachmentUrl ? '#10b981' : 'rgba(255, 255, 255, 0.6)'
+                    }}
+                    title="Upload proof/image"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={handleChatFileChange}
+                      disabled={isUploadingChat}
+                    />
+                    {isUploadingChat ? (
+                      <span className="spinner-loader" style={{ width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                    ) : (
+                      <span style={{ fontSize: '1rem', fontWeight: '700' }}>📎</span>
+                    )}
+                  </label>
+                </div>
+              )}
               <input
                 type="text"
                 placeholder="Type a message..."
@@ -1067,9 +1536,10 @@ export default function MatchDetailModal({
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 maxLength={1000}
-                required
+                required={!chatAttachmentUrl}
+                style={{ flex: 1 }}
               />
-              <button type="submit" className="btn btn-primary btn-sm chat-send-btn">
+              <button type="submit" className="btn btn-primary btn-sm chat-send-btn" disabled={isUploadingChat}>
                 Send
               </button>
             </form>
