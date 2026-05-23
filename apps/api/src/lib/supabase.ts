@@ -32,3 +32,13 @@ export function buildUserClient(accessToken: string) {
     },
   });
 }
+
+// Builds a fresh throwaway client for guest login to avoid mutating supabaseAdmin's auth state
+export function buildAuthClient() {
+  return createClient(supabaseUrl, process.env.SUPABASE_ANON_KEY ?? supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}

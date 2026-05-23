@@ -34,7 +34,7 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      if (isNewUser || !user.username) {
+      if (isNewUser || !user.username || user.username.startsWith('google_')) {
         navigate('/complete-profile', { replace: true });
       } else {
         navigate('/', { replace: true });

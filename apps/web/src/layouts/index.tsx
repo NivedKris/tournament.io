@@ -15,7 +15,7 @@ export function ProtectedLayout() {
 
   if (isLoading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  if (isNewUser || !user.username) return <Navigate to="/complete-profile" replace />;
+  if (isNewUser || !user.username || user.username.startsWith('google_')) return <Navigate to="/complete-profile" replace />;
   if (user.is_suspended) return <Navigate to="/suspended" replace />;
 
   return (
