@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { supabaseAdmin } from '../lib/supabase';
 import { verifySession, requireRole, requireActive } from '../middleware/auth';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const router = Router();
 
@@ -504,6 +505,188 @@ router.post('/admin/start-knockouts', verifySession, requireRole('admin'), async
   } catch (err: any) {
     console.error('[start-knockouts]', err);
     return res.status(500).json({ success: false, error: err.message ?? 'Internal error' });
+  }
+});
+
+router.get('/stats', verifySession, requireActive, async (req: Request, res: Response) => {
+  try {
+    // 1. Fetch current active tournament
+    let tournament = await getActiveTournament();
+    if (!tournament) {
+      // Fallback: search for last completed tournament to show historical stats
+      const { data: lastCompleted } = await supabaseAdmin
+        .from('tournaments')
+        .select('*')
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      tournament = lastCompleted;
+    }
+
+    if (!tournament) {
+      return res.json({
+        success: true,
+        data: { topScorers: [], topPlaymakers: [], topGoalkeepers: [], aiSummary: 'No active or completed tournament found.' }
+      });
+    }
+
+    // 2. Fetch all match events for this tournament
+    const { data: matchesList } = await supabaseAdmin
+      .from('matches')
+      .select('id')
+      .eq('tournament_id', tournament.id);
+
+    const matchIds = matchesList?.map(m => m.id) || [];
+
+    let topScorers: any[] = [];
+    let topPlaymakers: any[] = [];
+    let topGoalkeepers: any[] = [];
+
+    if (matchIds.length > 0) {
+      // Fetch goals and assists
+      const { data: events, error: evErr } = await supabaseAdmin
+        .from('match_events')
+        .select('player_id, event_type, claim_id, player:players(*), claim:nation_claims(*, users(id, username, display_name), nations(id, name, flag_url))')
+        .in('match_id', matchIds);
+
+      if (evErr) {
+        console.error('Error fetching match events:', evErr);
+      }
+
+      const scorersMap: Record<string, { player: any; claim: any; count: number }> = {};
+      const playmakersMap: Record<string, { player: any; claim: any; count: number }> = {};
+
+      if (events) {
+        for (const item of events) {
+          const pid = String(item.player_id);
+          const detail = {
+            player: item.player,
+            claim: item.claim,
+            count: 0
+          };
+          if (item.event_type === 'goal') {
+            if (!scorersMap[pid]) scorersMap[pid] = detail;
+            scorersMap[pid].count++;
+          } else if (item.event_type === 'assist') {
+            if (!playmakersMap[pid]) playmakersMap[pid] = detail;
+            playmakersMap[pid].count++;
+          }
+        }
+      }
+
+      topScorers = Object.values(scorersMap).sort((a, b) => b.count - a.count);
+      topPlaymakers = Object.values(playmakersMap).sort((a, b) => b.count - a.count);
+
+      // Fetch goalkeeper stats
+      const { data: claims } = await supabaseAdmin
+        .from('nation_claims')
+        .select('id, nation_id, nations(id, name, flag_url), users(id, username, display_name)')
+        .eq('tournament_id', tournament.id);
+
+      const { data: squads } = await supabaseAdmin
+        .from('squads')
+        .select('claim_id, positions')
+        .eq('tournament_id', tournament.id);
+
+      const { data: verifiedMatches } = await supabaseAdmin
+        .from('matches')
+        .select('*')
+        .eq('tournament_id', tournament.id)
+        .eq('status', 'verified');
+
+      if (claims && squads) {
+        const gkPlayerIds = squads.map(s => s.positions?.GK).filter(Boolean) as number[];
+        
+        let gkPlayers: any[] = [];
+        if (gkPlayerIds.length > 0) {
+          const { data: dbGks } = await supabaseAdmin
+            .from('players')
+            .select('*')
+            .in('id', gkPlayerIds);
+          gkPlayers = dbGks || [];
+        }
+
+        const gkStats = claims.map(claim => {
+          const squad = squads.find(s => s.claim_id === claim.id);
+          const gkId = squad?.positions?.GK;
+          const gkPlayer = gkPlayers.find(p => String(p.id) === String(gkId));
+          
+          if (!gkPlayer) return null;
+
+          const teamMatches = verifiedMatches?.filter(m => m.home_claim_id === claim.id || m.away_claim_id === claim.id) || [];
+          let cleanSheets = 0;
+          let goalsConceded = 0;
+
+          for (const m of teamMatches) {
+            const opponentGoals = m.home_claim_id === claim.id ? m.away_score : m.home_score;
+            if (opponentGoals === 0) cleanSheets++;
+            goalsConceded += opponentGoals || 0;
+          }
+
+          return {
+            player: gkPlayer,
+            claim,
+            cleanSheets,
+            goalsConceded,
+            matchesPlayed: teamMatches.length
+          };
+        }).filter(Boolean);
+
+        topGoalkeepers = (gkStats as any[]).sort((a, b) => {
+          if (b.cleanSheets !== a.cleanSheets) return b.cleanSheets - a.cleanSheets;
+          return a.goalsConceded - b.goalsConceded; // secondary sort: fewer goals conceded
+        });
+      }
+    }
+
+    // 3. Generate AI sports news summary paragraph
+    let aiSummary = 'Live statistics are being compiled. Goalkeeping and goalscorer leaderboards will appear here as match results are verified.';
+    const hasAnyStats = topScorers.length > 0 || topPlaymakers.length > 0 || topGoalkeepers.some(g => g.matchesPlayed > 0);
+    
+    if (hasAnyStats) {
+      const prompt = `
+You are a professional, enthusiastic eFootball sports news anchor reporting on the ongoing tournament.
+Write a concise, engaging summary report of the current tournament statistics based on the live data below.
+Mention the leaders, the tight races, and highlight notable goalkeeping performances or high-scoring players. Keep the tone premium and exciting, like a real sports center report. Do not use markdown headers, bullet points or list format, write it as a single natural, beautiful paragraph of 3-5 sentences.
+
+Live Statistics:
+Top Goal Scorers:
+${topScorers.slice(0, 3).map(s => `- ${s.player?.name || 'Unknown'} (${s.claim?.nations?.name}): ${s.count} goals`).join('\n') || 'No goals scored yet.'}
+
+Top Playmakers:
+${topPlaymakers.slice(0, 3).map(p => `- ${p.player?.name || 'Unknown'} (${p.claim?.nations?.name}): ${p.count} assists`).join('\n') || 'No assists recorded yet.'}
+
+Goalkeepers (Sorted by Clean Sheets):
+${topGoalkeepers.slice(0, 3).map(g => `- ${g.player?.name || 'Unknown'} (${g.claim?.nations?.name}): ${g.cleanSheets} clean sheets, conceded ${g.goalsConceded} goals in ${g.matchesPlayed} matches`).join('\n') || 'No matches played yet.'}
+`;
+
+      try {
+        const key = process.env.GEMINI_API_KEY;
+        if (key) {
+          const genAI = new GoogleGenerativeAI(key);
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+          const result = await model.generateContent(prompt);
+          aiSummary = result.response.text().trim();
+        }
+      } catch (err) {
+        console.error('[Gemini Stats Summary Error]:', err);
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        topScorers,
+        topPlaymakers,
+        topGoalkeepers,
+        aiSummary
+      }
+    });
+
+  } catch (err: any) {
+    console.error('[GET /stats]', err);
+    return res.status(500).json({ success: false, error: err.message ?? 'Failed to compute stats' });
   }
 });
 

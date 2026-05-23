@@ -186,6 +186,10 @@ export default function SquadBuilderPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
+  const [isLocked, setIsLocked] = useState(false);
+  const [isLocking, setIsLocking] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
+
   const pitchRef = useRef<HTMLDivElement>(null);
   const dragNodeRef = useRef<string | null>(null);
 
@@ -216,6 +220,7 @@ export default function SquadBuilderPage() {
             const squad = sRes.data.data;
             setFormation(squad.formation);
             setPositions(squad.positions || {});
+            setIsLocked(!!squad.locked);
 
             if (squad.coordinates) {
               setCoords(squad.coordinates);
@@ -273,6 +278,7 @@ export default function SquadBuilderPage() {
 
   // Handle slot clicking (Starting XI or Sub)
   const handleSlotClick = (nodeKey: string) => {
+    if (isLocked) return;
     if (swapSourceNode) {
       if (swapSourceNode === nodeKey) {
         setSwapSourceNode(null);
@@ -320,10 +326,12 @@ export default function SquadBuilderPage() {
 
   // Drag handlers for starting XI
   const handleTouchStart = (nodeKey: string) => {
+    if (isLocked) return;
     dragNodeRef.current = nodeKey;
   };
 
   const handleMouseDown = (nodeKey: string) => {
+    if (isLocked) return;
     dragNodeRef.current = nodeKey;
   };
 
@@ -367,6 +375,29 @@ export default function SquadBuilderPage() {
     };
   }, []);
 
+  const handleLock = async () => {
+    if (!window.confirm("Are you sure you want to LOCK your squad? Once locked, you cannot modify, swap, or search for players, and your formation is final for this tournament. Please ensure your starting XI is complete.")) {
+      return;
+    }
+
+    setIsLocking(true);
+    setLockError(null);
+
+    try {
+      const response = await api.post('/squad/lock');
+      if (response.data.success) {
+        setIsLocked(true);
+      } else {
+        setLockError(response.data.error || 'Failed to lock squad');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setLockError(err.response?.data?.error || 'Failed to lock squad');
+    } finally {
+      setIsLocking(false);
+    }
+  };
+
   // Save squad action
   const handleSave = async () => {
     setIsSaving(true);
@@ -406,6 +437,15 @@ export default function SquadBuilderPage() {
 
   return (
     <div className="app-shell">
+      {/* Squad Locked Banner */}
+      {isLocked && (
+        <div className="swap-banner-container" style={{ background: 'rgba(16, 185, 129, 0.15)', borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+          <div className="swap-banner" style={{ color: '#10b981' }}>
+            <span>🔒 <strong>SQUAD LOCKED</strong> — Your squad is registered and locked for this tournament. No further edits can be made.</span>
+          </div>
+        </div>
+      )}
+
       {/* Swap Mode Indicator Banner */}
       {swapSourceNode && (
         <div className="swap-banner-container">
@@ -430,14 +470,31 @@ export default function SquadBuilderPage() {
         <div className="nav-right">
           {saveStatus === 'success' && <span className="status-toast success">Squad Saved</span>}
           {saveStatus === 'error' && <span className="status-toast error">Save Failed</span>}
+          {lockError && <span className="status-toast error">{lockError}</span>}
 
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleSave}
-            disabled={isSaving}
-          >
-            {isSaving ? 'Saving...' : 'Save Tactics'}
-          </button>
+          {!isLocked ? (
+            <>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleLock}
+                disabled={isSaving || isLocking}
+                style={{ marginRight: '8px' }}
+              >
+                {isLocking ? 'Locking...' : 'Lock Squad'}
+              </button>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleSave}
+                disabled={isSaving || isLocking}
+              >
+                {isSaving ? 'Saving...' : 'Save Tactics'}
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-success btn-sm" disabled style={{ background: '#10b981', color: '#fff', border: 'none', opacity: 0.8, cursor: 'not-allowed' }}>
+              Locked & Ready
+            </button>
+          )}
         </div>
       </nav>
 
@@ -454,6 +511,7 @@ export default function SquadBuilderPage() {
                 value={formation}
                 onChange={(e) => handleFormationChange(e.target.value)}
                 className="form-input"
+                disabled={isLocked}
               >
                 <option value="4-3-3">4-3-3 (Standard)</option>
                 <option value="4-4-2">4-4-2 (Flat)</option>

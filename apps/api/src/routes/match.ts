@@ -183,7 +183,14 @@ router.get('/', verifySession, requireActive, async (req: Request, res: Response
 router.get('/:id', verifySession, requireActive, async (req: Request, res: Response) => {
   const { data: match, error } = await supabaseAdmin.from('matches').select(MATCH_SELECT).eq('id', req.params.id).maybeSingle();
   if (error || !match) return res.status(404).json({ success: false, error: 'Match not found' });
-  return res.json({ success: true, data: match });
+
+  // Fetch events for this match
+  const { data: events } = await supabaseAdmin
+    .from('match_events')
+    .select('*, player:players(*)')
+    .eq('match_id', match.id);
+
+  return res.json({ success: true, data: { ...match, events: events || [] } });
 });
 
 // ─── POST /matches/:id/submit-score ──────────────────────────────────────────
@@ -198,13 +205,26 @@ router.post('/:id/submit-score', verifySession, requireActive, async (req: Reque
     if (match.status !== 'scheduled') return res.status(400).json({ success: false, error: `Match is already ${match.status}. Cannot submit score.` });
     if (match.is_bye) return res.status(400).json({ success: false, error: 'BYE matches cannot have scores submitted.' });
 
-    const { home_score, away_score, home_pens, away_pens } = req.body as {
-      home_score?: number; away_score?: number; home_pens?: number; away_pens?: number;
+    const { home_score, away_score, home_pens, away_pens, screenshot_url, events } = req.body as {
+      home_score?: number;
+      away_score?: number;
+      home_pens?: number;
+      away_pens?: number;
+      screenshot_url?: string;
+      events?: Array<{
+        claim_id: string;
+        player_id: number;
+        event_type: 'goal' | 'assist';
+      }>;
     };
 
     if (home_score == null || away_score == null) return res.status(400).json({ success: false, error: 'home_score and away_score are required' });
     if (!Number.isInteger(home_score) || !Number.isInteger(away_score)) return res.status(400).json({ success: false, error: 'Scores must be whole numbers' });
     if (home_score < 0 || away_score < 0) return res.status(400).json({ success: false, error: 'Scores must be 0 or greater' });
+
+    if (!screenshot_url) {
+      return res.status(400).json({ success: false, error: 'Result screenshot attachment is required' });
+    }
 
     const isDraw = home_score === away_score;
     const needsPenalties = isDraw && (match.stage === 'pre_qual' || match.stage === 'knockout');
@@ -218,15 +238,69 @@ router.post('/:id/submit-score', verifySession, requireActive, async (req: Reque
       if (home_pens === away_pens) return res.status(400).json({ success: false, error: 'Penalty shootout must have a clear winner (scores cannot be equal)' });
     }
 
+    // Validate events if provided
+    if (events) {
+      if (!Array.isArray(events)) {
+        return res.status(400).json({ success: false, error: 'Events must be an array' });
+      }
+
+      let homeEventGoals = 0;
+      let awayEventGoals = 0;
+
+      for (const ev of events) {
+        if (!ev.claim_id || !ev.player_id || !ev.event_type) {
+          return res.status(400).json({ success: false, error: 'Each event must have claim_id, player_id, and event_type' });
+        }
+        if (ev.event_type !== 'goal' && ev.event_type !== 'assist') {
+          return res.status(400).json({ success: false, error: 'event_type must be either goal or assist' });
+        }
+
+        if (ev.event_type === 'goal') {
+          if (ev.claim_id === match.home_claim_id) {
+            homeEventGoals++;
+          } else if (ev.claim_id === match.away_claim_id) {
+            awayEventGoals++;
+          } else {
+            return res.status(400).json({ success: false, error: 'Event claim_id does not match home or away team' });
+          }
+        }
+      }
+
+      if (homeEventGoals > home_score) {
+        return res.status(400).json({ success: false, error: `Assigned goals (${homeEventGoals}) exceeds home team score (${home_score})` });
+      }
+      if (awayEventGoals > away_score) {
+        return res.status(400).json({ success: false, error: `Assigned goals (${awayEventGoals}) exceeds away team score (${away_score})` });
+      }
+    }
+
     const updatePayload: any = {
       home_score, away_score,
       submitted_by: uid,
       status: 'pending_verification',
+      screenshot_url: screenshot_url || null,
     };
     if (needsPenalties) { updatePayload.home_pens = home_pens; updatePayload.away_pens = away_pens; }
 
     const { data: updated, error: upErr } = await supabaseAdmin.from('matches').update(updatePayload).eq('id', match.id).select(MATCH_SELECT).single();
     if (upErr) return res.status(500).json({ success: false, error: 'Failed to submit score' });
+
+    // Save match events
+    await supabaseAdmin.from('match_events').delete().eq('match_id', match.id);
+    if (events && events.length > 0) {
+      const eventsToInsert = events.map(ev => ({
+        match_id: match.id,
+        claim_id: ev.claim_id,
+        player_id: ev.player_id,
+        event_type: ev.event_type,
+      }));
+
+      const { error: evErr } = await supabaseAdmin.from('match_events').insert(eventsToInsert);
+      if (evErr) {
+        console.error('[submit-score] Error inserting match events:', evErr);
+        return res.status(500).json({ success: false, error: 'Failed to save match statistics' });
+      }
+    }
 
     return res.json({ success: true, data: updated });
   } catch (err: any) {
@@ -267,8 +341,17 @@ router.post('/admin/:id/verify', verifySession, requireRole('admin'), async (req
     if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
     if (match.status === 'verified') return res.status(400).json({ success: false, error: 'Match is already verified' });
 
-    const { home_score, away_score, home_pens, away_pens } = req.body as {
-      home_score?: number; away_score?: number; home_pens?: number; away_pens?: number;
+    const { home_score, away_score, home_pens, away_pens, screenshot_url, events } = req.body as {
+      home_score?: number;
+      away_score?: number;
+      home_pens?: number;
+      away_pens?: number;
+      screenshot_url?: string;
+      events?: Array<{
+        claim_id: string;
+        player_id: number;
+        event_type: 'goal' | 'assist';
+      }>;
     };
     if (home_score == null || away_score == null) return res.status(400).json({ success: false, error: 'home_score and away_score are required' });
 
@@ -281,12 +364,57 @@ router.post('/admin/:id/verify', verifySession, requireRole('admin'), async (req
       return res.status(400).json({ success: false, error: 'Penalty shootout must have a clear winner' });
     }
 
+    // Validate events if provided
+    if (events) {
+      if (!Array.isArray(events)) {
+        return res.status(400).json({ success: false, error: 'Events must be an array' });
+      }
+
+      let homeEventGoals = 0;
+      let awayEventGoals = 0;
+
+      for (const ev of events) {
+        if (ev.event_type === 'goal') {
+          if (ev.claim_id === match.home_claim_id) homeEventGoals++;
+          else if (ev.claim_id === match.away_claim_id) awayEventGoals++;
+        }
+      }
+
+      if (homeEventGoals > home_score) {
+        return res.status(400).json({ success: false, error: `Assigned goals (${homeEventGoals}) exceeds home team score (${home_score})` });
+      }
+      if (awayEventGoals > away_score) {
+        return res.status(400).json({ success: false, error: `Assigned goals (${awayEventGoals}) exceeds away team score (${away_score})` });
+      }
+    }
+
     const updatePayload: any = {
-      home_score, away_score, status: 'verified', verified_at: new Date().toISOString(),
+      home_score,
+      away_score,
+      status: 'verified',
+      verified_at: new Date().toISOString(),
+      screenshot_url: screenshot_url || match.screenshot_url || null,
     };
     if (needsPenalties) { updatePayload.home_pens = home_pens; updatePayload.away_pens = away_pens; }
 
     const { data: updated } = await supabaseAdmin.from('matches').update(updatePayload).eq('id', match.id).select().single();
+
+    // Save match events
+    await supabaseAdmin.from('match_events').delete().eq('match_id', match.id);
+    if (events && events.length > 0) {
+      const eventsToInsert = events.map(ev => ({
+        match_id: match.id,
+        claim_id: ev.claim_id,
+        player_id: ev.player_id,
+        event_type: ev.event_type,
+      }));
+
+      const { error: evErr } = await supabaseAdmin.from('match_events').insert(eventsToInsert);
+      if (evErr) {
+        console.error('[admin/verify] Error inserting match events:', evErr);
+      }
+    }
+
     resolveAfterVerified(match.id).catch(err => console.error('[resolveAfterVerified]', err));
 
     return res.json({ success: true, data: updated });
@@ -302,10 +430,14 @@ router.post('/admin/:id/reset', verifySession, requireRole('admin'), async (req:
     const { data: match } = await supabaseAdmin.from('matches').select('id,status').eq('id', req.params.id).maybeSingle();
     if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
 
+    // Clean up events
+    await supabaseAdmin.from('match_events').delete().eq('match_id', match.id);
+
     const { data: updated } = await supabaseAdmin.from('matches').update({
       status: 'scheduled',
       home_score: null, away_score: null,
       home_pens: null, away_pens: null,
+      screenshot_url: null,
       submitted_by: null, verified_at: null,
     }).eq('id', match.id).select().single();
 

@@ -40,6 +40,15 @@ interface MatchDetails {
   is_prequal: boolean;
   is_bye: boolean;
   verified_at: string | null;
+  screenshot_url: string | null;
+  events?: Array<{
+    id: string;
+    claim_id: string;
+    player_id: number;
+    event_type: 'goal' | 'assist';
+    player?: any;
+    claim?: any;
+  }>;
   home_claim: ClaimInfo | null;
   away_claim: ClaimInfo | null;
 }
@@ -82,6 +91,46 @@ export default function MatchDetailModal({
   const [homePens, setHomePens] = useState('');
   const [awayPens, setAwayPens] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Submit score additions
+  const [screenshotUrl, setScreenshotUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  // Each entry = one goal. assister_id is optional.
+  const [events, setEvents] = useState<Array<{ claim_id: string; scorer_id: number; assister_id: number | null }>>([]);
+  
+  const [homeSquadPlayers, setHomeSquadPlayers] = useState<any[]>([]);
+  const [awaySquadPlayers, setAwaySquadPlayers] = useState<any[]>([]);
+
+  // Admin events state
+  const [adminEvents, setAdminEvents] = useState<Array<{ claim_id: string; player_id: number; event_type: 'goal' | 'assist' }>>([]);
+
+  // File upload helper
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (res.data.success && res.data.data?.url) {
+        setScreenshotUrl(res.data.data.url);
+      } else {
+        setError(res.data.error || 'Failed to upload screenshot');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Failed to upload screenshot');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Admin form state
   const [adminHomeScore, setAdminHomeScore] = useState('');
@@ -139,6 +188,47 @@ export default function MatchDetailModal({
     }
   }, [messages, activeTab]);
 
+  // Load squad players for scorers/assisters listing
+  useEffect(() => {
+    if (match) {
+      if (match.home_claim_id) {
+        api.get(`/squad/${match.home_claim_id}`).then((res) => {
+          if (res.data.success && res.data.data) {
+            const pos = res.data.data.positions || {};
+            const list = Object.values(pos).filter(Boolean);
+            setHomeSquadPlayers(list);
+          }
+        });
+      }
+      if (match.away_claim_id) {
+        api.get(`/squad/${match.away_claim_id}`).then((res) => {
+          if (res.data.success && res.data.data) {
+            const pos = res.data.data.positions || {};
+            const list = Object.values(pos).filter(Boolean);
+            setAwaySquadPlayers(list);
+          }
+        });
+      }
+    }
+  }, [match]);
+
+  // Pre-populate admin override fields when match loads
+  useEffect(() => {
+    if (match) {
+      setAdminHomeScore(match.home_score !== null ? match.home_score.toString() : '');
+      setAdminAwayScore(match.away_score !== null ? match.away_score.toString() : '');
+      setAdminHomePens(match.home_pens !== null ? match.home_pens.toString() : '');
+      setAdminAwayPens(match.away_pens !== null ? match.away_pens.toString() : '');
+      if (match.events) {
+        setAdminEvents(match.events.map(e => ({
+          claim_id: e.claim_id,
+          player_id: e.player_id,
+          event_type: e.event_type
+        })));
+      }
+    }
+  }, [match]);
+
   if (isLoading || !match) {
     return (
       <div className="modal-backdrop">
@@ -182,7 +272,28 @@ export default function MatchDetailModal({
       return;
     }
 
-    const payload: any = { home_score: hs, away_score: as_ };
+    if (!screenshotUrl) {
+      setError('A result screenshot is required as proof.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Flatten combined goal rows into flat goal + assist events for the API
+    const flatEvents: Array<{ claim_id: string; player_id: number; event_type: 'goal' | 'assist' }> = [];
+    for (const ev of events) {
+      if (!ev.claim_id || !ev.scorer_id) continue;
+      flatEvents.push({ claim_id: ev.claim_id, player_id: ev.scorer_id, event_type: 'goal' });
+      if (ev.assister_id) {
+        flatEvents.push({ claim_id: ev.claim_id, player_id: ev.assister_id, event_type: 'assist' });
+      }
+    }
+
+    const payload: any = {
+      home_score: hs,
+      away_score: as_,
+      screenshot_url: screenshotUrl,
+      events: flatEvents,
+    };
 
     // Shootout required if score is equal and stage is pre_qual or knockout
     const isPrequalOrKnockout = match.stage === 'pre_qual' || match.stage === 'knockout';
@@ -268,7 +379,8 @@ export default function MatchDetailModal({
       return;
     }
 
-    const payload: any = { home_score: hs, away_score: as_ };
+    const validEvents = adminEvents.filter(e => e.claim_id && e.player_id);
+    const payload: any = { home_score: hs, away_score: as_, events: validEvents };
     if (hs === as_ && (match.stage === 'pre_qual' || match.stage === 'knockout')) {
       const hp = parseInt(adminHomePens);
       const ap = parseInt(adminAwayPens);
@@ -421,6 +533,55 @@ export default function MatchDetailModal({
               </div>
             </div>
 
+            {/* Screenshot proof and events display for pending/verified matches */}
+            {(match.screenshot_url || (match.events && match.events.length > 0)) && (
+              <div className="action-form-section" style={{ marginTop: '16px' }}>
+                <h5>Match Submission Details</h5>
+                {match.screenshot_url && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <p style={{ fontSize: '0.85rem', color: '#9ca3af', marginBottom: '6px' }}>Uploaded Screenshot Proof:</p>
+                    <a href={match.screenshot_url} target="_blank" rel="noopener noreferrer">
+                      <img src={match.screenshot_url} alt="Proof" style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'zoom-in' }} />
+                    </a>
+                  </div>
+                )}
+                {match.events && match.events.length > 0 && (() => {
+                  // Group flat events into goal rows with optional assist
+                  const goals = match.events.filter((e: any) => e.event_type === 'goal');
+                  const assists = match.events.filter((e: any) => e.event_type === 'assist');
+                  return (
+                    <div>
+                      <p style={{ fontSize: '0.75rem', fontWeight: '600', letterSpacing: '0.05em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: '10px' }}>Match Events</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {goals.map((e: any, i: number) => {
+                          const assist = assists[i]; // best-effort pairing by index
+                          return (
+                            <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                              <span style={{ color: '#fff', fontSize: '0.875rem', fontWeight: '600' }}>{e.player?.name || 'Unknown'}</span>
+                              {assist && (
+                                <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.8rem', fontWeight: '500' }}>
+                                  ({assist.player?.name || 'Unknown'})
+                                </span>
+                              )}
+                              <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', fontWeight: '500', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{e.claim?.nations?.name}</span>
+                            </div>
+                          );
+                        })}
+                        {assists.slice(goals.length).map((e: any) => (
+                          <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(129,140,248,0.7)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3z"/><path d="M12 3c-1.5 2-2.5 5-2.5 9s1 7 2.5 9"/><path d="M12 3c1.5 2 2.5 5 2.5 9s-1 7-2.5 9"/><path d="M3 12h18"/></svg>
+                            <span style={{ color: '#fff', fontSize: '0.875rem', fontWeight: '600' }}>{e.player?.name || 'Unknown'}</span>
+                            <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', fontWeight: '500', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{e.claim?.nations?.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             {/* Submit Score Form */}
             {showSubmitForm && (
               <div className="action-form-section">
@@ -494,6 +655,151 @@ export default function MatchDetailModal({
                         </div>
                       </div>
                     )}
+
+                  {/* Result Screenshot Proof */}
+                  <div className="form-group" style={{ marginTop: '16px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.82rem', fontWeight: '600', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)' }}>
+                      Screenshot Proof <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+
+                    {/* Hidden native input */}
+                    <input
+                      id="screenshot-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      disabled={isSubmitting || isUploading}
+                      style={{ display: 'none' }}
+                    />
+
+                    {/* Custom styled drop zone */}
+                    <label
+                      htmlFor="screenshot-upload"
+                      className={`file-upload-zone${screenshotUrl ? ' file-upload-zone--done' : ''}${isUploading ? ' file-upload-zone--loading' : ''}`}
+                    >
+                      {isUploading ? (
+                        <>
+                          <div className="file-upload-zone__icon">
+                            <div className="loading-spinner" style={{ width: '18px', height: '18px' }} />
+                          </div>
+                          <span className="file-upload-zone__text">Uploading…</span>
+                        </>
+                      ) : screenshotUrl ? (
+                        <>
+                          <div className="file-upload-zone__preview">
+                            <img src={screenshotUrl} alt="Proof preview" />
+                          </div>
+                          <div className="file-upload-zone__meta">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                            <span style={{ color: '#34d399', fontSize: '0.82rem', fontWeight: '600' }}>Uploaded — tap to replace</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="file-upload-zone__icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                              <circle cx="9" cy="9" r="2" />
+                              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                            </svg>
+                          </div>
+                          <span className="file-upload-zone__text">Attach screenshot proof</span>
+                          <span className="file-upload-zone__hint">JPG, PNG or WebP · max 5 MB</span>
+                        </>
+                      )}
+                    </label>
+                  </div>
+
+                  {/* Match Events (Goals) */}
+                  <div className="form-group" style={{ marginTop: '20px' }}>
+                    <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.82rem', fontWeight: '600', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)' }}>
+                      Goals
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {events.map((event, index) => {
+                        const squadPlayers = event.claim_id === match.home_claim_id ? homeSquadPlayers : awaySquadPlayers;
+                        return (
+                          <div key={index} style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '10px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {/* Row 1: Team picker + remove */}
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <select
+                                value={event.claim_id}
+                                onChange={(e) => {
+                                  const updated = [...events];
+                                  updated[index] = { ...updated[index], claim_id: e.target.value, scorer_id: 0, assister_id: null };
+                                  setEvents(updated);
+                                }}
+                                className="form-input"
+                                style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 10px', borderRadius: '8px', fontSize: '0.875rem' }}
+                              >
+                                <option value="">Select team</option>
+                                {match.home_claim && <option value={match.home_claim_id}>{match.home_claim.nations?.name}</option>}
+                                {match.away_claim && <option value={match.away_claim_id}>{match.away_claim.nations?.name}</option>}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => setEvents(events.filter((_, i) => i !== index))}
+                                style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                              </button>
+                            </div>
+
+                            {/* Row 2: Scorer + Assister selects */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <p style={{ margin: '0 0 4px', fontSize: '0.72rem', fontWeight: '600', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Scorer</p>
+                                <select
+                                  value={event.scorer_id || ''}
+                                  onChange={(e) => {
+                                    const updated = [...events];
+                                    updated[index] = { ...updated[index], scorer_id: parseInt(e.target.value) || 0 };
+                                    setEvents(updated);
+                                  }}
+                                  className="form-input"
+                                  style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 10px', borderRadius: '8px', fontSize: '0.875rem' }}
+                                  disabled={!event.claim_id}
+                                >
+                                  <option value="">Select scorer</option>
+                                  {squadPlayers.map((p: any) => (
+                                    <option key={p.id} value={p.id}>{p.name} ({p.overall})</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <p style={{ margin: '0 0 4px', fontSize: '0.72rem', fontWeight: '600', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Assist <span style={{ color: 'rgba(255,255,255,0.2)', fontWeight: '400' }}>(optional)</span></p>
+                                <select
+                                  value={event.assister_id || ''}
+                                  onChange={(e) => {
+                                    const updated = [...events];
+                                    updated[index] = { ...updated[index], assister_id: parseInt(e.target.value) || null };
+                                    setEvents(updated);
+                                  }}
+                                  className="form-input"
+                                  style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 10px', borderRadius: '8px', fontSize: '0.875rem' }}
+                                  disabled={!event.claim_id}
+                                >
+                                  <option value="">None</option>
+                                  {squadPlayers.filter((p: any) => p.id !== event.scorer_id).map((p: any) => (
+                                    <option key={p.id} value={p.id}>{p.name} ({p.overall})</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEvents([...events, { claim_id: '', scorer_id: 0, assister_id: null }])}
+                      style={{ marginTop: '8px', width: '100%', padding: '10px', borderRadius: '8px', border: '1.5px dashed rgba(255,255,255,0.12)', background: 'transparent', color: 'rgba(255,255,255,0.45)', fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                      onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.7)'; }}
+                      onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.45)'; }}
+                    >
+                      + Add Goal
+                    </button>
+                  </div>
 
                   <button
                     type="submit"
@@ -609,6 +915,89 @@ export default function MatchDetailModal({
                         </div>
                       </div>
                     )}
+
+                  {/* Admin Match Events */}
+                  <div className="form-group mt-4" style={{ marginTop: '16px' }}>
+                    <label className="block text-sm font-semibold mb-2" style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600', color: '#fbbf24' }}>
+                      Force Registered Goals & Assists
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {adminEvents.map((event, index) => (
+                        <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <select
+                            value={event.claim_id}
+                            onChange={(e) => {
+                              const updated = [...adminEvents];
+                              updated[index].claim_id = e.target.value;
+                              updated[index].player_id = 0;
+                              setAdminEvents(updated);
+                            }}
+                            className="form-input"
+                            style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
+                            required
+                          >
+                            <option value="">Select Team</option>
+                            {match.home_claim && <option value={match.home_claim_id}>{match.home_claim.nations?.name} (Home)</option>}
+                            {match.away_claim && <option value={match.away_claim_id}>{match.away_claim.nations?.name} (Away)</option>}
+                          </select>
+
+                          <select
+                            value={event.event_type}
+                            onChange={(e) => {
+                              const updated = [...adminEvents];
+                              updated[index].event_type = e.target.value as 'goal' | 'assist';
+                              setAdminEvents(updated);
+                            }}
+                            className="form-input"
+                            style={{ width: '90px', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
+                            required
+                          >
+                            <option value="goal">Goal ⚽</option>
+                            <option value="assist">Assist 👟</option>
+                          </select>
+
+                          <select
+                            value={event.player_id || ''}
+                            onChange={(e) => {
+                              const updated = [...adminEvents];
+                              updated[index].player_id = parseInt(e.target.value);
+                              setAdminEvents(updated);
+                            }}
+                            className="form-input"
+                            style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
+                            required
+                            disabled={!event.claim_id}
+                          >
+                            <option value="">Select Player</option>
+                            {(event.claim_id === match.home_claim_id ? homeSquadPlayers : awaySquadPlayers).map((p: any) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} ({p.overall})
+                              </option>
+                            ))}
+                          </select>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdminEvents(adminEvents.filter((_, i) => i !== index));
+                            }}
+                            className="btn btn-danger"
+                            style={{ padding: '4px 8px', borderRadius: '4px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer' }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAdminEvents([...adminEvents, { claim_id: '', player_id: 0, event_type: 'goal' }])}
+                      className="btn btn-secondary mt-2"
+                      style={{ padding: '6px 12px', fontSize: '0.85rem', marginTop: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', cursor: 'pointer' }}
+                    >
+                      + Add Goal/Assist Event
+                    </button>
+                  </div>
 
                   <div className="flex gap-4 mt-4">
                     <button

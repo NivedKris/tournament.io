@@ -6,6 +6,7 @@ import NationPicker from '../components/NationPicker';
 import GroupStandingsTable from '../components/GroupStandingsTable';
 import KnockoutBracket from '../components/KnockoutBracket';
 import MatchDetailModal from '../components/MatchDetailModal';
+import TournamentStatsTab from '../components/TournamentStatsTab';
 
 interface Tournament {
   id: string;
@@ -57,7 +58,7 @@ interface Match {
   } | null;
 }
 
-type TabType = 'fixtures' | 'standings' | 'bracket';
+type TabType = 'fixtures' | 'standings' | 'bracket' | 'stats';
 
 export default function HomePage() {
   const { user, signOut } = useAuthStore();
@@ -602,6 +603,13 @@ export default function HomePage() {
                       Knockout Bracket
                     </button>
                   )}
+
+                  <button
+                    className={`tab-link ${activeTab === 'stats' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('stats')}
+                  >
+                    Tournament Stats
+                  </button>
                 </div>
 
                 {/* Tab Panel: Fixtures */}
@@ -711,6 +719,13 @@ export default function HomePage() {
                       userClaimId={userClaim?.id}
                       onMatchClick={(id) => setSelectedMatchId(id)}
                     />
+                  </div>
+                )}
+
+                {/* Tab Panel: Stats */}
+                {activeTab === 'stats' && (
+                  <div className="tab-pane-content">
+                    <TournamentStatsTab />
                   </div>
                 )}
 
