@@ -1568,7 +1568,6 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isFadingOut, setIsFadingOut] = useState(false);
-  const [playError, setPlayError] = useState(false);
 
   const videoUrl = mode === 'ucl' ? '/ucl.mp4' : '/wc.mp4';
 
@@ -1583,8 +1582,7 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
         setIsMuted(false);
         await video.play();
       } catch (err) {
-        console.warn("Autoplay unmuted blocked by browser, showing play prompt", err);
-        setPlayError(true);
+        console.warn("Direct autoplay unmuted blocked, waiting for interaction", err);
       }
     };
 
@@ -1637,8 +1635,14 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
       e.preventDefault();
       handleSkip();
     } else {
-      // Single tap toggles mute/unmute
-      toggleMute();
+      const video = videoRef.current;
+      if (video && video.paused) {
+        video.muted = false;
+        setIsMuted(false);
+        video.play().catch(err => console.error("Play failed", err));
+      } else {
+        toggleMute();
+      }
     }
     lastTapRef.current = now;
   };
@@ -1650,7 +1654,16 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
       handleSkip();
     } else if (e.detail === 1) {
       // Single click
-      toggleMute();
+      const video = videoRef.current;
+      if (video) {
+        if (video.paused) {
+          video.muted = false;
+          setIsMuted(false);
+          video.play().catch(err => console.error("Play failed", err));
+        } else {
+          toggleMute();
+        }
+      }
     }
   };
 
@@ -1666,40 +1679,9 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
         className="cinematic-video"
         src={videoUrl}
         playsInline
+        autoPlay
         onEnded={handleSkip}
       />
-
-      {playError && (
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, zIndex: 100001 }}>
-          <button 
-            type="button"
-            className="btn btn-primary"
-            style={{
-              background: mode === 'ucl' ? '#3b82f6' : '#F5C842',
-              borderColor: mode === 'ucl' ? '#3b82f6' : '#F5C842',
-              color: '#000',
-              fontWeight: 700,
-              fontSize: '1rem',
-              padding: '14px 28px',
-              borderRadius: 'var(--r-md)',
-              boxShadow: '0 0 30px rgba(255,255,255,0.1)'
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              const video = videoRef.current;
-              if (video) {
-                video.muted = false;
-                setIsMuted(false);
-                video.play().then(() => {
-                  setPlayError(false);
-                }).catch(err => console.error("Manual play failed", err));
-              }
-            }}
-          >
-            ▶ Play Anthem
-          </button>
-        </div>
-      )}
 
       <div className="cinematic-hud">
         {/* Playback status buttons */}
