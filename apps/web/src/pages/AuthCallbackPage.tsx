@@ -1,17 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import LoadingScreen from '../components/LoadingScreen';
 
+/**
+ * Supabase redirects back to /auth/callback after Google OAuth.
+ * The URL contains the session tokens in the hash fragment.
+ * We detect the session, sync with the backend, then redirect.
+ */
 export default function AuthCallbackPage() {
   const navigate = useNavigate();
   const { loadSession } = useAuthStore();
-  const [ready, setReady] = useState(false);
-  const [targetPath, setTargetPath] = useState('/');
 
   useEffect(() => {
     const handle = async () => {
+      // Supabase automatically picks up the session from the URL hash
       const { data: { session }, error } = await supabase.auth.getSession();
 
       if (error || !session) {
@@ -20,6 +24,7 @@ export default function AuthCallbackPage() {
         return;
       }
 
+      // Sync with backend — upserts user record
       await loadSession();
 
       const { user, isNewUser } = useAuthStore.getState();
@@ -30,66 +35,14 @@ export default function AuthCallbackPage() {
       }
 
       if (isNewUser || !user.username || user.username.startsWith('google_')) {
-        setTargetPath('/complete-profile');
+        navigate('/complete-profile', { replace: true });
       } else {
-        setTargetPath('/');
+        navigate('/', { replace: true });
       }
-      setReady(true);
     };
 
     handle();
   }, [navigate, loadSession]);
 
-  if (!ready) {
-    return <LoadingScreen />;
-  }
-
-  return (
-    <div style={{
-      minHeight: '100dvh',
-      background: 'var(--bg)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-      textAlign: 'center'
-    }}>
-      <div style={{
-        maxWidth: 400,
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 32,
-        animation: 'fadeUp var(--slow) var(--ease) both'
-      }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-          <img src="/logo.png" alt="Matchup" style={{ height: 64, width: 'auto', filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.15))' }} />
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--gray-100)', letterSpacing: '-0.02em' }}>
-            Sign In Successful
-          </h2>
-          <p style={{ fontSize: '0.9rem', color: 'var(--gray-400)', maxWidth: 300 }}>
-
-          </p>
-        </div>
-
-        <button
-          className="btn btn-primary"
-          style={{
-            width: '100%',
-            padding: '16px',
-            fontSize: '1rem',
-            fontWeight: 700,
-            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-            border: 'none',
-            boxShadow: '0 4px 20px rgba(59, 130, 246, 0.3)'
-          }}
-          onClick={() => navigate(targetPath, { replace: true })}
-        >
-          Enter Arena
-        </button>
-      </div>
-    </div>
-  );
+  return <LoadingScreen />;
 }
