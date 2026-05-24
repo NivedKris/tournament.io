@@ -1579,21 +1579,12 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
 
     const startPlayback = async () => {
       try {
-        // Attempt playing with sound first (unmuted)
         video.muted = false;
         setIsMuted(false);
         await video.play();
       } catch (err) {
-        console.warn("Autoplay with sound prevented, falling back to muted autoplay", err);
-        try {
-          // Fallback to muted playback
-          video.muted = true;
-          setIsMuted(true);
-          await video.play();
-          setPlayError(true); // show tap to unmute indicator
-        } catch (fallbackErr) {
-          console.error("Muted playback failed too", fallbackErr);
-        }
+        console.warn("Autoplay unmuted blocked by browser, showing play prompt", err);
+        setPlayError(true);
       }
     };
 
@@ -1634,9 +1625,6 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
     if (video) {
       video.muted = !video.muted;
       setIsMuted(video.muted);
-      if (!video.muted) {
-        setPlayError(false); // cleared since user successfully unmuted
-      }
     }
   };
 
@@ -1681,6 +1669,38 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
         onEnded={handleSkip}
       />
 
+      {playError && (
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, zIndex: 100001 }}>
+          <button 
+            type="button"
+            className="btn btn-primary"
+            style={{
+              background: mode === 'ucl' ? '#3b82f6' : '#F5C842',
+              borderColor: mode === 'ucl' ? '#3b82f6' : '#F5C842',
+              color: '#000',
+              fontWeight: 700,
+              fontSize: '1rem',
+              padding: '14px 28px',
+              borderRadius: 'var(--r-md)',
+              boxShadow: '0 0 30px rgba(255,255,255,0.1)'
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              const video = videoRef.current;
+              if (video) {
+                video.muted = false;
+                setIsMuted(false);
+                video.play().then(() => {
+                  setPlayError(false);
+                }).catch(err => console.error("Manual play failed", err));
+              }
+            }}
+          >
+            ▶ Play Anthem
+          </button>
+        </div>
+      )}
+
       <div className="cinematic-hud">
         {/* Playback status buttons */}
         <button 
@@ -1710,7 +1730,6 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
 
         {/* Action hints */}
         <div className="cinematic-hint-hud">
-          {playError && <span style={{ color: '#F5C842' }}>🔇 Muted • Tap to unmute •</span>}
           <span>Double-tap to skip</span>
         </div>
       </div>
