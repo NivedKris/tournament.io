@@ -94,7 +94,8 @@ router.post('/:id/dispute', verifySession, requireActive, async (req: Request, r
         match_id: matchId,
         raised_by: userId,
         comment: comment.trim(),
-        status: 'open'
+        status: 'open',
+        tenant_id: match.tenant_id
       })
       .select()
       .single();

@@ -9,10 +9,12 @@ const router = Router();
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-export async function getActiveTournament() {
+export async function getActiveTournament(tenantId?: string) {
+  const tId = tenantId || '00000000-0000-0000-0000-000000000000';
   const { data: active } = await supabaseAdmin
     .from('tournaments')
     .select('*')
+    .eq('tenant_id', tId)
     .neq('status', 'completed')
     .order('created_at', { ascending: false })
     .limit(1)
@@ -22,6 +24,7 @@ export async function getActiveTournament() {
   const { data: completed } = await supabaseAdmin
     .from('tournaments')
     .select('*')
+    .eq('tenant_id', tId)
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
     .limit(1)
@@ -107,48 +110,23 @@ router.post('/admin/create', verifySession, requireRole('admin'), async (req: Re
     return res.status(400).json({ success: false, error: 'Name and valid mode (world_cup or ucl) are required' });
   }
   const { data: tournament, error } = await supabaseAdmin
-    .from('tournaments').insert({ name: name.trim(), mode, status: 'registration' }).select().single();
+    .from('tournaments').insert({ name: name.trim(), mode, status: 'registration', tenant_id: req.tenantId }).select().single();
   if (error) return res.status(500).json({ success: false, error: 'Failed to create tournament' });
   return res.status(201).json({ success: true, data: tournament });
 });
 
-router.get('/current', async (_req: Request, res: Response) => {
+router.get('/current', async (req: Request, res: Response) => {
   try {
-    // 1. First look for active tournament (status not completed)
-    const { data: active, error: activeErr } = await supabaseAdmin
-      .from('tournaments')
-      .select('*')
-      .neq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (activeErr) throw activeErr;
-
-    if (active) {
-      return res.json({ success: true, data: active });
-    }
-
-    // 2. If no active tournament, check for the most recently completed tournament
-    const { data: completed, error: compErr } = await supabaseAdmin
-      .from('tournaments')
-      .select('*')
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (compErr) throw compErr;
-
-    return res.json({ success: true, data: completed ?? null });
+    const tournament = await getActiveTournament(req.tenantId);
+    return res.json({ success: true, data: tournament ?? null });
   } catch (err: any) {
     console.error('[GET /current]', err);
     return res.status(500).json({ success: false, error: err.message || 'Failed to fetch tournament' });
   }
 });
 
-router.get('/nations', async (_req: Request, res: Response) => {
-  const tournament = await getActiveTournament();
+router.get('/nations', async (req: Request, res: Response) => {
+  const tournament = await getActiveTournament(req.tenantId);
   if (!tournament) return res.json({ success: true, data: [] });
 
   const { data: nations } = await supabaseAdmin.from('nations').select('*').eq('mode', tournament.mode).order('name');
@@ -167,7 +145,7 @@ router.post('/claim', verifySession, requireActive, async (req: Request, res: Re
   const { nation_id } = req.body as { nation_id?: string };
   if (!nation_id) return res.status(400).json({ success: false, error: 'Nation ID is required' });
 
-  const tournament = await getActiveTournament();
+  const tournament = await getActiveTournament(req.tenantId);
   if (!tournament) return res.status(404).json({ success: false, error: 'No active tournament found' });
   if (tournament.status !== 'registration') return res.status(400).json({ success: false, error: 'Registration is closed' });
 
@@ -178,7 +156,7 @@ router.post('/claim', verifySession, requireActive, async (req: Request, res: Re
   if (existingClaim) return res.status(400).json({ success: false, error: 'You have already claimed a nation in this tournament' });
 
   const { data: newClaim, error: insertErr } = await supabaseAdmin.from('nation_claims')
-    .insert({ tournament_id: tournament.id, nation_id: nation.id, user_id: req.user!.id, status: 'pending' })
+    .insert({ tournament_id: tournament.id, nation_id: nation.id, user_id: req.user!.id, status: 'pending', tenant_id: req.tenantId })
     .select().single();
   if (insertErr) return res.status(500).json({ success: false, error: 'Failed to submit nation claim' });
   return res.status(201).json({ success: true, data: newClaim });
@@ -188,7 +166,7 @@ router.post('/claim', verifySession, requireActive, async (req: Request, res: Re
 
 router.post('/admin/draw-prequals', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const tournament = await getActiveTournament();
+    const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) return res.status(404).json({ success: false, error: 'No active tournament found' });
     if (tournament.status !== 'registration') return res.status(400).json({ success: false, error: 'Tournament is not in registration phase' });
 
@@ -225,6 +203,7 @@ router.post('/admin/draw-prequals', verifySession, requireRole('admin'), async (
               away_claim_id: flip ? claimIds[j] : claimIds[i],
               stage: 'pre_qual', status: 'scheduled',
               is_prequal: true, is_bye: false,
+              tenant_id: req.tenantId,
             });
           }
         }
@@ -264,7 +243,7 @@ router.post('/admin/draw-prequals', verifySession, requireRole('admin'), async (
 
 router.post('/admin/draw-groups', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const tournament = await getActiveTournament();
+    const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) return res.status(404).json({ success: false, error: 'No active tournament found' });
     if (tournament.status !== 'pre_qual') return res.status(400).json({ success: false, error: `Tournament is in '${tournament.status}', not 'pre_qual'` });
 
@@ -297,6 +276,7 @@ router.post('/admin/draw-groups', verifySession, requireRole('admin'), async (re
         away_claim_id: flip ? shuffled[1].id : shuffled[0].id,
         stage: 'knockout', round: 1, bracket_slot: 1,
         status: 'scheduled', is_bye: false, is_prequal: false,
+        tenant_id: req.tenantId,
       });
       await supabaseAdmin.from('tournaments').update({ status: 'knockout' }).eq('id', tournament.id);
       return res.json({ success: true, data: { note: 'Only 2 managers — direct final created', groups: 0, matches: 1 } });
@@ -321,6 +301,7 @@ router.post('/admin/draw-groups', verifySession, requireRole('admin'), async (re
             away_claim_id: flip ? groupClaims[j].id : groupClaims[i].id,
             stage: 'group', group_name: groupName,
             status: 'scheduled', is_bye: false, is_prequal: false,
+            tenant_id: req.tenantId,
           });
         }
       }
@@ -345,9 +326,9 @@ router.post('/admin/draw-groups', verifySession, requireRole('admin'), async (re
 
 // ─── Phase 3: Group Standings ─────────────────────────────────────────────────
 
-router.get('/standings', async (_req: Request, res: Response) => {
+router.get('/standings', async (req: Request, res: Response) => {
   try {
-    const tournament = await getActiveTournament();
+    const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) return res.json({ success: true, data: [] });
 
     const { data: groupMatches } = await supabaseAdmin.from('matches').select('*')
@@ -442,7 +423,7 @@ router.get('/standings', async (_req: Request, res: Response) => {
 
 router.post('/admin/start-knockouts', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const tournament = await getActiveTournament();
+    const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) return res.status(404).json({ success: false, error: 'No active tournament found' });
     if (tournament.status !== 'group_stage') return res.status(400).json({ success: false, error: `Tournament is in '${tournament.status}', not 'group_stage'` });
 
@@ -513,6 +494,7 @@ router.post('/admin/start-knockouts', verifySession, requireRole('admin'), async
           stage: 'knockout', round: firstRound, bracket_slot: slot,
           status: 'verified', home_score: 1, away_score: 0,
           is_bye: true, is_prequal: false, verified_at: new Date().toISOString(),
+          tenant_id: req.tenantId,
         });
       } else {
         const flip = Math.random() > 0.5;
@@ -522,6 +504,7 @@ router.post('/admin/start-knockouts', verifySession, requireRole('admin'), async
           away_claim_id: flip ? claimB : claimA,
           stage: 'knockout', round: firstRound, bracket_slot: slot,
           status: 'scheduled', is_bye: false, is_prequal: false,
+          tenant_id: req.tenantId,
         });
       }
     }
@@ -559,12 +542,13 @@ router.post('/admin/start-knockouts', verifySession, requireRole('admin'), async
 router.get('/stats', verifySession, requireActive, async (req: Request, res: Response) => {
   try {
     // 1. Fetch current active tournament
-    let tournament = await getActiveTournament();
+    let tournament = await getActiveTournament(req.tenantId);
     if (!tournament) {
       // Fallback: search for last completed tournament to show historical stats
       const { data: lastCompleted } = await supabaseAdmin
         .from('tournaments')
         .select('*')
+        .eq('tenant_id', req.tenantId || '00000000-0000-0000-0000-000000000000')
         .eq('status', 'completed')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -634,7 +618,7 @@ ${topGoalkeepers.slice(0, 3).map(g => `- ${g.player?.name || 'Unknown'} (${g.cla
 
 router.post('/admin/reset', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const tournament = await getActiveTournament();
+    const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) {
       return res.status(404).json({ success: false, error: 'No active or completed tournament found to reset' });
     }

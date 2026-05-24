@@ -1,6 +1,6 @@
 // ─── User & Auth ────────────────────────────────────────────────────────────
 
-export type UserRole = 'player' | 'admin';
+export type UserRole = 'player' | 'admin' | 'super_admin';
 
 export interface User {
   id: string;
@@ -10,6 +10,7 @@ export interface User {
   role: UserRole;
   is_suspended: boolean;
   created_at: string;
+  tenant_id?: string;
 }
 
 // ─── Tournament ──────────────────────────────────────────────────────────────

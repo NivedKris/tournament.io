@@ -8,13 +8,15 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   isNewUser: boolean;
+  enrolledTenants: any[];
   setUser: (user: User | null) => void;
   setIsNewUser: (val: boolean) => void;
+  setEnrolledTenants: (tenants: any[]) => void;
   signInWithGoogle: () => Promise<void>;
   signInWithGuest: (username: string, password: string) => Promise<void>;
   signUpWithGuest: (name: string, username: string, password: string) => Promise<{ sanitized_username: string }>;
   signOut: () => Promise<void>;
-  loadSession: () => Promise<void>;
+  loadSession: () => Promise<any>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -23,14 +25,24 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isLoading: true,
       isNewUser: false,
+      enrolledTenants: [],
 
       setUser: (user) => set({ user }),
       setIsNewUser: (val) => set({ isNewUser: val }),
+      setEnrolledTenants: (tenants) => set({ enrolledTenants: tenants }),
 
       signInWithGoogle: async () => {
+        const port = window.location.port ? `:${window.location.port}` : '';
+        const baseDomain = window.location.hostname.includes('localhost') 
+          ? `localhost${port}` 
+          : window.location.hostname; // Fallback to current host if not local
+
+        const protocol = window.location.protocol;
+        const redirectUrl = `${protocol}//${baseDomain}/auth/callback`;
+
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
-          options: { redirectTo: `${window.location.origin}/auth/callback` },
+          options: { redirectTo: redirectUrl },
         });
         if (error) throw error;
       },
@@ -52,7 +64,7 @@ export const useAuthStore = create<AuthState>()(
           // Plant session in Supabase client so loadSession works going forward
           await supabase.auth.setSession({ access_token, refresh_token });
 
-          set({ user: appUser, isNewUser: false, isLoading: false });
+          set({ user: appUser, isNewUser: false, isLoading: false, enrolledTenants: [] });
         } catch (err) {
           set({ isLoading: false });
           throw err;
@@ -79,7 +91,7 @@ export const useAuthStore = create<AuthState>()(
           const { user: appUser, access_token, refresh_token } = loginRes.data.data;
           await supabase.auth.setSession({ access_token, refresh_token });
 
-          set({ user: appUser, isNewUser: false, isLoading: false });
+          set({ user: appUser, isNewUser: false, isLoading: false, enrolledTenants: [] });
           return { sanitized_username };
         } catch (err) {
           set({ isLoading: false });
@@ -89,7 +101,8 @@ export const useAuthStore = create<AuthState>()(
 
       signOut: async () => {
         await supabase.auth.signOut();
-        set({ user: null, isNewUser: false });
+        localStorage.removeItem('oauth_tenant_slug');
+        set({ user: null, isNewUser: false, enrolledTenants: [] });
         window.location.href = '/login';
       },
 
@@ -103,20 +116,26 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
+          const oauthTenantSlug = localStorage.getItem('oauth_tenant_slug') || undefined;
+
           // Sync with our backend — upserts user record on first login
           const { data } = await api.post('/auth/session', {
             access_token: session.access_token,
+            targetTenantSlug: oauthTenantSlug,
           });
 
           if (data.success) {
             set({
               user: data.data.user,
               isNewUser: data.data.is_new,
+              enrolledTenants: data.data.tenants || [],
               isLoading: false,
             });
+            return data;
           }
-        } catch {
+        } catch (err) {
           set({ user: null, isLoading: false });
+          throw err;
         }
       },
     }),

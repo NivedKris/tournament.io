@@ -28,14 +28,87 @@ router.get('/google', async (_req: Request, res: Response) => {
   return res.redirect(data.url);
 });
 
+// Determines the tenant and role of a user based on enrolled admin emails and super admin configs
+async function determineUserRoleAndTenant(email?: string, defaultTenantId: string = '00000000-0000-0000-0000-000000000000') {
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'superadmin@gmail.com').toLowerCase();
+  const userEmail = email?.toLowerCase();
+  
+  let role = 'player';
+  let tenantId = defaultTenantId;
+
+  if (userEmail === superAdminEmail) {
+    role = 'super_admin';
+  } else if (userEmail) {
+    const { data: matchedTenant } = await supabaseAdmin
+      .from('tenants')
+      .select('id')
+      .eq('admin_email', userEmail)
+      .maybeSingle();
+
+    if (matchedTenant) {
+      role = 'admin';
+      tenantId = matchedTenant.id;
+    }
+  }
+  return { role, tenantId };
+}
+
+async function convertInvitationsToMemberships(userId: string, email: string) {
+  try {
+    // 1. Fetch pending invitations for this email
+    const { data: invites } = await supabaseAdmin
+      .from('tenant_invitations')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .eq('status', 'pending');
+
+    if (invites && invites.length > 0) {
+      for (const invite of invites) {
+        // Insert into tenant_memberships
+        await supabaseAdmin
+          .from('tenant_memberships')
+          .upsert(
+            { user_id: userId, tenant_id: invite.tenant_id, role: invite.role },
+            { onConflict: 'user_id, tenant_id', ignoreDuplicates: true }
+          );
+
+        // Mark invite as joined
+        await supabaseAdmin
+          .from('tenant_invitations')
+          .update({ status: 'joined' })
+          .eq('id', invite.id);
+      }
+    }
+
+    // 2. Also check if the email matches any tenant's admin_email
+    const { data: adminTenants } = await supabaseAdmin
+      .from('tenants')
+      .select('id')
+      .eq('admin_email', email.toLowerCase());
+
+    if (adminTenants && adminTenants.length > 0) {
+      for (const t of adminTenants) {
+        await supabaseAdmin
+          .from('tenant_memberships')
+          .upsert(
+            { user_id: userId, tenant_id: t.id, role: 'admin' },
+            { onConflict: 'user_id, tenant_id', ignoreDuplicates: true }
+          );
+      }
+    }
+  } catch (err) {
+    console.error('[convertInvitationsToMemberships] Error converting invites:', err);
+  }
+}
+
 /**
  * POST /auth/session
  * Called by the frontend after Supabase handles the OAuth callback and
  * returns the session tokens. We upsert the user record on first login.
- * Body: { access_token, refresh_token, user: { id, email, user_metadata } }
+ * Body: { access_token }
  */
 router.post('/session', async (req: Request, res: Response) => {
-  const { access_token } = req.body as { access_token?: string };
+  const { access_token, targetTenantSlug } = req.body as { access_token?: string; targetTenantSlug?: string };
 
   if (!access_token) {
     return res.status(400).json({ success: false, error: 'access_token is required' });
@@ -48,80 +121,233 @@ router.post('/session', async (req: Request, res: Response) => {
     return res.status(401).json({ success: false, error: 'Invalid access token' });
   }
 
-  // Check if user record already exists by id
-  const { data: existingById } = await supabaseAdmin
+  const email = user.email || '';
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'mark.organisation@gmail.com').toLowerCase();
+  const isSuperAdmin = email.toLowerCase() === superAdminEmail;
+  const googleId = user.user_metadata?.sub ?? user.id;
+
+  // 1. Check if user already exists by ID
+  let { data: existingById } = await supabaseAdmin
     .from('users')
     .select('*')
     .eq('id', user.id)
     .maybeSingle();
 
-  if (existingById) {
-    if (!existingById.email && user.email) {
-      await supabaseAdmin.from('users').update({ email: user.email }).eq('id', user.id);
-      existingById.email = user.email;
+  // 2. If not found by ID, check by google_id to map UUID mismatch if any
+  if (!existingById) {
+    const { data: existingByGoogle } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('google_id', googleId)
+      .maybeSingle();
+
+    if (existingByGoogle) {
+      // Sync the user's Supabase auth ID to their profile record
+      const { data: updated, error: updateErr } = await supabaseAdmin
+        .from('users')
+        .update({ id: user.id, email })
+        .eq('google_id', googleId)
+        .select()
+        .single();
+
+      if (updateErr) {
+        console.error('[auth/session] Failed to sync user ID:', updateErr);
+        return res.status(500).json({ success: false, error: 'Failed to sync user ID record' });
+      }
+      existingById = updated;
+    } else {
+      // Create a new user profile record
+      const displayName = user.user_metadata?.full_name ?? '';
+      const username = `google_${user.id.replace(/-/g, '').substring(0, 10)}`;
+
+      const { data: created, error: createErr } = await supabaseAdmin
+        .from('users')
+        .upsert(
+          {
+            id: user.id,
+            google_id: googleId,
+            email,
+            display_name: displayName,
+            username,
+            role: 'player', // placeholder role initially
+            tenant_id: null,
+            is_suspended: false,
+          },
+          { onConflict: 'id' }
+        )
+        .select()
+        .single();
+
+      if (createErr) {
+        console.error('[auth/session] Failed to create/upsert user:', createErr);
+        return res.status(500).json({ success: false, error: 'Failed to create user record' });
+      }
+      existingById = created;
     }
-    return res.json({ success: true, data: { user: existingById, is_new: false } });
+  } else if (!existingById.email && email) {
+    // If the user exists by ID but email was not set, sync it
+    const { data: updated } = await supabaseAdmin
+      .from('users')
+      .update({ email })
+      .eq('id', user.id)
+      .select()
+      .single();
+    if (updated) {
+      existingById = updated;
+    }
   }
 
-  // Check if user record already exists by google_id
-  const googleId = user.user_metadata?.sub ?? user.id;
-  const { data: existingByGoogle } = await supabaseAdmin
-    .from('users')
-    .select('*')
-    .eq('google_id', googleId)
-    .maybeSingle();
+  // 3. Convert any pending invitations or register tenant admin memberships
+  // Now that the user record definitely exists in public.users, this won't violate key constraints!
+  if (email) {
+    await convertInvitationsToMemberships(user.id, email);
+  }
 
-  if (existingByGoogle) {
-    // Sync the UUID in public.users to match the new one from Supabase Auth.
-    // Thanks to ON UPDATE CASCADE, this propagates to referencing tables automatically.
+  // 4. Determine user roles & active tenant selection based on memberships
+  let requireTenantSelection = false;
+  let finalRole = 'player';
+  let finalTenantId: string | null = null;
+  let enrolledTenants: any[] = [];
+
+  if (isSuperAdmin) {
+    finalRole = 'super_admin';
+    finalTenantId = null;
+  } else {
+    // Query active memberships with tenant metadata
+    const { data: memberships, error: memErr } = await supabaseAdmin
+      .from('tenant_memberships')
+      .select('role, tenant_id, tenants (id, name, slug, logo_url)')
+      .eq('user_id', user.id) as any;
+
+    if (memErr) {
+      console.error('[auth/session] Failed to query memberships:', memErr);
+      return res.status(500).json({ success: false, error: 'Failed to verify tournament invitations' });
+    }
+
+    if (!memberships || memberships.length === 0) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'no_invitations', 
+        message: 'You have not been invited to any tournament. Please contact your coordinator.' 
+      });
+    }
+
+    enrolledTenants = memberships.map((m: any) => ({
+      role: m.role,
+      id: m.tenant_id,
+      name: m.tenants?.name || 'Tournament Arena',
+      slug: m.tenants?.slug || 'default',
+      logo_url: m.tenants?.logo_url
+    }));
+
+    let targetTenantId: string | null = null;
+    if (targetTenantSlug) {
+      const { data: targetTenant } = await supabaseAdmin
+        .from('tenants')
+        .select('id')
+        .eq('slug', targetTenantSlug)
+        .maybeSingle();
+      if (targetTenant) {
+        targetTenantId = targetTenant.id;
+      }
+    }
+
+    if (memberships.length === 1) {
+      finalRole = memberships[0].role;
+      finalTenantId = memberships[0].tenant_id;
+    } else {
+      if (targetTenantId) {
+        // If they just accepted an invitation, prioritize and route directly to that target tenant
+        const currentMembership = memberships.find((m: any) => m.tenant_id === targetTenantId);
+        if (currentMembership) {
+          finalRole = currentMembership.role;
+          finalTenantId = currentMembership.tenant_id;
+        } else {
+          requireTenantSelection = true;
+          finalTenantId = null;
+        }
+      } else {
+        // Normal login: if in multiple tournaments, always force them to choose which tournament portal to enter
+        requireTenantSelection = true;
+        finalTenantId = null;
+      }
+    }
+  }
+
+  // 5. Update user profile with final determined role & active tenant ID
+  const updateFields: any = { role: finalRole };
+  if (!requireTenantSelection) {
+    updateFields.tenant_id = finalTenantId;
+  }
+
+  const { data: finalUser, error: finalErr } = await supabaseAdmin
+    .from('users')
+    .update(updateFields)
+    .eq('id', user.id)
+    .select()
+    .single();
+
+  if (finalErr || !finalUser) {
+    console.error('[auth/session] Failed to update final user properties:', finalErr);
+    return res.status(500).json({ success: false, error: 'Failed to complete session setup' });
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      user: finalUser,
+      requireTenantSelection,
+      tenants: enrolledTenants
+    }
+  });
+});
+
+/**
+ * POST /auth/select-tenant
+ * Updates user session with active tournament portal choice
+ */
+router.post('/select-tenant', verifySession, async (req: Request, res: Response) => {
+  const { tenantId } = req.body as { tenantId?: string };
+  const userId = req.user?.id;
+
+  if (!tenantId || !userId) {
+    return res.status(400).json({ success: false, error: 'tenantId is required' });
+  }
+
+  try {
+    // Verify membership
+    const { data: membership, error: memErr } = await supabaseAdmin
+      .from('tenant_memberships')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (memErr || !membership) {
+      return res.status(403).json({ success: false, error: 'You do not belong to this organization' });
+    }
+
+    // Update active portal tenant and role mapping
     const { data: updated, error: updateErr } = await supabaseAdmin
       .from('users')
-      .update({ id: user.id, email: user.email || '' })
-      .eq('google_id', googleId)
+      .update({
+        tenant_id: tenantId,
+        role: membership.role
+      })
+      .eq('id', userId)
       .select()
       .single();
 
     if (updateErr) {
-      console.error('[auth/session] Failed to sync user ID:', updateErr);
-      return res.status(500).json({ success: false, error: 'Failed to sync user ID record' });
+      console.error('[select-tenant] Error selecting tenant:', updateErr);
+      return res.status(500).json({ success: false, error: 'Failed to enter tournament portal' });
     }
 
-    return res.json({ success: true, data: { user: updated, is_new: false } });
+    return res.json({ success: true, data: { user: updated } });
+  } catch (err: any) {
+    console.error('[select-tenant] Unexpected error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Internal server error' });
   }
-
-  // First login — create a partial record (no username/display_name yet)
-  // The frontend will prompt them to complete their profile
-  const { data: created, error: createErr } = await supabaseAdmin
-    .from('users')
-    .insert({
-      id: user.id,
-      google_id: googleId,
-      email: user.email || '',
-      display_name: user.user_metadata?.full_name ?? '',
-      username: `google_${user.id.replace(/-/g, '').substring(0, 10)}`, // Must be completed via /auth/complete-profile
-      role: 'player',
-      is_suspended: false,
-    })
-    .select()
-    .single();
-
-  if (createErr) {
-    if (createErr.code === '23505') {
-      // Handle race condition where a concurrent request inserted the user record first
-      const { data: reFetched } = await supabaseAdmin
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (reFetched) {
-        return res.json({ success: true, data: { user: reFetched, is_new: true } });
-      }
-    }
-    console.error('[auth/session] Failed to create user:', createErr);
-    return res.status(500).json({ success: false, error: 'Failed to create user record' });
-  }
-
-  return res.status(201).json({ success: true, data: { user: created, is_new: true } });
 });
 
 /**
@@ -219,6 +445,7 @@ router.post('/guest-register', async (req: Request, res: Response) => {
         display_name: name.trim(),
         username: u,
         role: u.startsWith('admin') ? 'admin' : 'player',
+        tenant_id: req.tenantId,
         is_suspended: false,
       })
       .select()

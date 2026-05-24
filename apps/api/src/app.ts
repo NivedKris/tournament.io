@@ -13,6 +13,10 @@ import uploadRouter from './routes/upload';
 import disputeRouter from './routes/dispute';
 import rewardRouter from './routes/reward';
 import notificationRouter from './routes/notification';
+import tenantRouter from './routes/tenant';
+import superadminRouter from './routes/superadmin';
+import invitationRouter from './routes/invitation';
+import { resolveTenant } from './middleware/tenant';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -31,7 +35,7 @@ app.use(
     origin: FRONTEND_URL,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-slug'],
   })
 );
 
@@ -49,9 +53,15 @@ app.use(
   })
 );
 
+// Apply resolveTenant middleware globally to attach tenantId context
+app.use(resolveTenant);
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.use('/auth', authRouter);
+app.use('/tenant/invitations', invitationRouter);
+app.use('/tenant', tenantRouter);
+app.use('/super-admin', superadminRouter);
 app.use('/tournament', tournamentRouter);
 app.use('/squad', squadRouter);
 app.use('/matches', matchRouter);

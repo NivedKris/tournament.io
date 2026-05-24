@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { supabaseAdmin } from '../lib/supabase';
 
 // Inlined so the API is self-contained (no cross-workspace import needed in prod)
-type UserRole = 'player' | 'admin';
+type UserRole = 'player' | 'admin' | 'super_admin';
 
 // Extend Express Request to carry user info
 declare global {
@@ -12,6 +12,7 @@ declare global {
         id: string;
         role: UserRole;
         is_suspended: boolean;
+        tenant_id?: string;
       };
     }
   }
@@ -41,7 +42,7 @@ export async function verifySession(req: Request, res: Response, next: NextFunct
     // Fetch our application user record
     const { data: appUser, error: userError } = await supabaseAdmin
       .from('users')
-      .select('id, role, is_suspended')
+      .select('id, role, is_suspended, tenant_id')
       .eq('id', user.id)
       .single();
 
@@ -66,8 +67,13 @@ export function requireRole(role: UserRole) {
     if (!req.user) {
       return res.status(401).json({ success: false, error: 'Unauthenticated' });
     }
-    if (req.user.role !== role) {
+    // Allow super_admin to pass admin checks, otherwise roles must match exactly
+    if (req.user.role !== role && req.user.role !== 'super_admin') {
       return res.status(403).json({ success: false, error: `Requires ${role} role` });
+    }
+    // Enforce tenant boundary for local admins
+    if (req.user.role === 'admin' && req.user.tenant_id !== req.tenantId) {
+      return res.status(403).json({ success: false, error: 'Access denied: You are not an admin of this organization.' });
     }
     return next();
   };

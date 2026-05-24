@@ -1,6 +1,18 @@
 import axios from 'axios';
 import { supabase } from './supabase';
 
+// Helper to determine tenant slug from hostname or query param
+export function getTenantSlug(): string {
+  const oauthSlug = localStorage.getItem('oauth_tenant_slug');
+  if (oauthSlug) return oauthSlug;
+
+  const params = new URLSearchParams(window.location.search);
+  const paramSlug = params.get('tenant');
+  if (paramSlug) return paramSlug;
+
+  return 'default';
+}
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL as string,
   headers: {
@@ -8,12 +20,13 @@ const api = axios.create({
   },
 });
 
-// Inject the Supabase access token into every request
+// Inject the Supabase access token and tenant slug into every request
 api.interceptors.request.use(async (config) => {
   const { data: { session } } = await supabase.auth.getSession();
   if (session?.access_token) {
     config.headers.Authorization = `Bearer ${session.access_token}`;
   }
+  config.headers['x-tenant-slug'] = getTenantSlug();
   return config;
 });
 

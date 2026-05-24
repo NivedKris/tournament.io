@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import api from '../lib/api';
+import { useTenant } from '../components/TenantProvider';
 import NationPicker from '../components/NationPicker';
 import GroupStandingsTable from '../components/GroupStandingsTable';
 import KnockoutBracket from '../components/KnockoutBracket';
@@ -9,6 +10,7 @@ import MatchDetailModal from '../components/MatchDetailModal';
 import TournamentStatsTab from '../components/TournamentStatsTab';
 import CelebrationCanvas from '../components/CelebrationCanvas';
 import AdminNotificationDrawer from '../components/AdminNotificationDrawer';
+import InvitationsTab from '../components/InvitationsTab';
 
 interface Tournament {
   id: string;
@@ -64,7 +66,14 @@ type TabType = 'fixtures' | 'standings' | 'bracket' | 'stats';
 
 export default function HomePage() {
   const { user, signOut } = useAuthStore();
+  const { tenant } = useTenant();
   const navigate = useNavigate();
+
+  if (user?.role === 'super_admin') {
+    return <Navigate to="/super-admin" replace />;
+  }
+
+  const isTenantAdmin = user?.role === 'admin' && user?.tenant_id === tenant?.id;
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [nations, setNations] = useState<Nation[]>([]);
@@ -72,7 +81,7 @@ export default function HomePage() {
   const [standingsData, setStandingsData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [showClaimPicker, setShowClaimPicker] = useState(user?.role !== 'admin');
+  const [showClaimPicker, setShowClaimPicker] = useState(!isTenantAdmin);
   const [activeTab, setActiveTab] = useState<TabType>('fixtures');
   const [fixtureFilter, setFixtureFilter] = useState<'all' | 'my'>('all');
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
@@ -86,6 +95,7 @@ export default function HomePage() {
   // Reward states
   const [reward, setReward] = useState<any | null>(null);
   const [showRewardsPanel, setShowRewardsPanel] = useState(false);
+  const [showInvitesPanel, setShowInvitesPanel] = useState(false);
   const [showNotificationDrawer, setShowNotificationDrawer] = useState(false);
   const [rewardName, setRewardName] = useState('');
   const [rewardImageUrl, setRewardImageUrl] = useState('');
@@ -106,6 +116,28 @@ export default function HomePage() {
       setIntroState(watched ? 'done' : 'splash');
     }
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === 'super_admin') return;
+
+    // Strict lock for players: if their tenant does not match the active page's tenant, redirect them!
+    // For admins: only auto-redirect if they land on the base domain ('default' slug), otherwise show cross-tenant warning banner
+    const isPlayerIncorrect = user.role === 'player' && user.tenant_id && user.tenant_id !== tenant?.id;
+    const isAdminOnDefault = user.role === 'admin' && tenant?.slug === 'default' && user.tenant_id && user.tenant_id !== tenant.id;
+
+    if (isPlayerIncorrect || isAdminOnDefault) {
+      api.get(`/tenant/resolve-id/${user.tenant_id}`)
+        .then(res => {
+          if (res.data?.success && res.data?.data?.slug) {
+            const slug = res.data.data.slug;
+            localStorage.setItem('oauth_tenant_slug', slug);
+            window.location.href = `/?tenant=${slug}`;
+          }
+        })
+        .catch(err => console.error('Failed to auto-redirect tenant:', err));
+    }
+  }, [user, tenant]);
 
   const loadData = async () => {
     try {
@@ -595,9 +627,24 @@ export default function HomePage() {
       {/* Navbar */}
       <nav className="navbar">
         <div className="nav-brand">
-          <img src="/logo.png" alt="Matchup" className="nav-logo" />
+          <img
+            src={tenant?.logo_url || "/logo.png"}
+            alt={tenant?.name || "Matchup"}
+            className="nav-logo"
+            style={{
+              height: '36px',
+              width: 'auto',
+              maxHeight: '36px',
+              objectFit: 'contain',
+              filter: tenant && tenant.slug !== 'default' ? 'none' : 'invert(1)'
+            }}
+          />
           <span className="nav-wordmark">
-            <span>MATCH</span><span className="up">UP</span>
+            {tenant && tenant.slug !== 'default' ? (
+              <span style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--primary-color)' }}>{tenant.name}</span>
+            ) : (
+              <><span>MATCH</span><span className="up">UP</span></>
+            )}
           </span>
         </div>
 
@@ -606,7 +653,7 @@ export default function HomePage() {
             <span className="nav-display-name">{user?.display_name}</span>
             <span className="nav-username">@{user?.username}</span>
           </div>
-          {user?.role === 'admin' && <span className="badge badge-admin">Admin</span>}
+          {isTenantAdmin && user?.role === 'admin' && <span className="badge badge-admin">Admin</span>}
           <button id="signout-btn" className="btn btn-secondary btn-sm" onClick={signOut}>
             Sign out
           </button>
@@ -615,6 +662,63 @@ export default function HomePage() {
 
       {/* Main Container */}
       <div className="page-content">
+        {user?.role === 'admin' && user?.tenant_id !== tenant?.id && (
+          <div style={{
+            background: 'rgba(10, 132, 255, 0.1)',
+            border: '1px solid rgba(10, 132, 255, 0.2)',
+            borderRadius: '16px',
+            padding: '16px 24px',
+            marginBottom: '24px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '18px' }}>🌐</span>
+              <p style={{ margin: 0, fontSize: '14px', color: '#e5e5ea', fontWeight: 500 }}>
+                You are logged in as the coordinator of another league.
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                try {
+                  const res = await api.get(`/tenant/resolve-id/${user.tenant_id}`);
+                  if (res.data?.success && res.data?.data?.slug) {
+                    const slug = res.data.data.slug;
+                    localStorage.setItem('oauth_tenant_slug', slug);
+                    window.location.href = `/?tenant=${slug}`;
+                  }
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+              style={{
+                background: 'rgba(10, 132, 255, 0.2)',
+                border: '1px solid rgba(10, 132, 255, 0.4)',
+                borderRadius: '8px',
+                color: '#007aff',
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                backdropFilter: 'blur(5px)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#007aff';
+                e.currentTarget.style.color = '#fff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(10, 132, 255, 0.2)';
+                e.currentTarget.style.color = '#007aff';
+              }}
+            >
+              Go to My League Dashboard
+            </button>
+          </div>
+        )}
 
         {/* No Tournament State */}
         {!tournament ? (
@@ -625,7 +729,7 @@ export default function HomePage() {
             </div>
 
             {/* Launch Form */}
-            {user?.role === 'admin' && (
+            {isTenantAdmin && (
               <div className="admin-setup-card">
                 <h3>KICK OFF A TOURNAMENT</h3>
                 <p className="subtitle">Initialize the catalog of nations/clubs and open registrations.</p>
@@ -949,7 +1053,7 @@ export default function HomePage() {
             </div>
 
             {/* Admin Console Card */}
-            {user?.role === 'admin' && (
+            {isTenantAdmin && (
               <div className="admin-console-card">
                 <div className="console-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
@@ -983,7 +1087,10 @@ export default function HomePage() {
                     </button>
                     <button
                       className="btn btn-secondary btn-sm"
-                      onClick={() => setShowRewardsPanel(!showRewardsPanel)}
+                      onClick={() => {
+                        setShowRewardsPanel(!showRewardsPanel);
+                        setShowInvitesPanel(false);
+                      }}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -1007,6 +1114,35 @@ export default function HomePage() {
                         <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
                       </svg>
                       {showRewardsPanel ? 'Close Rewards' : 'Manage Rewards'}
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setShowInvitesPanel(!showInvitesPanel);
+                        setShowRewardsPanel(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: showInvitesPanel ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        color: '#fff',
+                        fontSize: '0.8rem',
+                        fontWeight: '600',
+                        borderRadius: '8px',
+                        padding: '6px 12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="8.5" cy="7" r="4" />
+                        <line x1="20" y1="8" x2="20" y2="14" />
+                        <line x1="23" y1="11" x2="17" y2="11" />
+                      </svg>
+                      {showInvitesPanel ? 'Close Invites' : 'Manage Invites'}
                     </button>
                   </div>
                 </div>
@@ -1252,6 +1388,13 @@ export default function HomePage() {
                   </div>
                 )}
 
+                {/* Admin Invitations Panel */}
+                {showInvitesPanel && (
+                  <div className="admin-invitations-panel mt-6 pt-6 border-t animate-slide-down" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                    <InvitationsTab />
+                  </div>
+                )}
+
                 {/* Central Disputes Inbox */}
                 {matches.some((m) => m.status === 'disputed') && (
                   <div className="admin-disputes-inbox mt-6 pt-6 border-t" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
@@ -1362,7 +1505,7 @@ export default function HomePage() {
               <div className={`claim-picker-section ${introState === 'done' ? 'fade-in-content' : ''}`}>
                 {introState === 'done' && (
                   <>
-                    {user?.role === 'admin' && (
+                    {isTenantAdmin && (
                       <button
                         className="btn btn-secondary btn-sm mb-4"
                         onClick={() => setShowClaimPicker(false)}
@@ -1593,7 +1736,7 @@ export default function HomePage() {
         <MatchDetailModal
           matchId={selectedMatchId}
           currentUserId={user?.id || ''}
-          isAdmin={user?.role === 'admin'}
+          isAdmin={isTenantAdmin}
           onClose={() => setSelectedMatchId(null)}
           onRefresh={loadData}
         />

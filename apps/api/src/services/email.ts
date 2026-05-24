@@ -44,7 +44,13 @@ export async function sendEmail(
           name: BREVO_SENDER_NAME,
           email: BREVO_SENDER_EMAIL,
         },
-        to: to.map(r => ({ email: r.email, name: r.name || r.username || '' })),
+        to: to.map(r => {
+          const defaultName = r.email.split('@')[0] || 'Player';
+          return {
+            email: r.email,
+            name: (r.name || r.username || '').trim() || defaultName
+          };
+        }),
         subject,
         htmlContent,
       }),
@@ -546,4 +552,239 @@ export async function notifyTournamentWinner(tournamentId: string, tournamentNam
   } catch (err) {
     console.error('[notifyTournamentWinner] Error:', err);
   }
+}
+
+/**
+ * Calculates high-contrast text color (dark/light) based on background hex color
+ */
+function getContrastColor(hexColor: string): string {
+  let cleanHex = hexColor.trim().replace('#', '');
+  if (cleanHex.length === 3) {
+    cleanHex = cleanHex.split('').map(char => char + char).join('');
+  }
+  if (cleanHex.length !== 6) return '#FFFFFF';
+  
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+  return (yiq >= 128) ? '#121215' : '#FFFFFF';
+}
+
+/**
+ * Sends a premium Apple-styled, tenant-branded invitation email to a player or admin.
+ */
+export async function sendTenantInvitationEmail(
+  email: string,
+  inviteId: string,
+  tenant: { name: string; slug: string; logo_url: string | null; primary_color: string },
+  role: 'player' | 'admin'
+): Promise<boolean> {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const inviteLink = `${frontendUrl}/invite/${inviteId}`;
+  
+  const brandColor = tenant.primary_color || '#007aff'; // Default Apple blue
+  const textColor = getContrastColor(brandColor); // Get optimal high-contrast text color
+  const logoSrc = tenant.logo_url || 'https://i.imgur.com/KzWdOaH.png'; // Premium neutral fallback logo
+  
+  const subject = role === 'admin'
+    ? `Action Required: Administrative Access to ${tenant.name}`
+    : `Invitation: Join ${tenant.name} on Matchup`;
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tournament Invitation</title>
+  <style>
+    body {
+      background-color: #0A0A0C;
+      color: #F5F5F7;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      width: 100%;
+      background-color: #0A0A0C;
+      padding: 40px 0;
+    }
+    .container {
+      max-width: 540px;
+      margin: 0 auto;
+      background: #121215;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+    .brand-glow {
+      height: 6px;
+      background: linear-gradient(90deg, ${brandColor} 0%, ${brandColor}CC 50%, ${brandColor}33 100%);
+    }
+    .content {
+      padding: 40px 32px 32px 32px;
+      text-align: center;
+    }
+    .logo-container {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      margin: 0 auto 24px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1), 0 8px 16px rgba(0, 0, 0, 0.4);
+    }
+    .logo-img {
+      max-width: 80%;
+      max-height: 80%;
+      object-fit: contain;
+      border-radius: 50%;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #A1A1A6;
+    }
+    .badge-admin {
+      background: ${brandColor}15;
+      border: 1px solid ${brandColor}30;
+      color: ${brandColor};
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.25;
+      color: #FFFFFF;
+      margin: 0 0 16px 0;
+      letter-spacing: -0.03em;
+    }
+    .subtitle {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #8E8E93;
+      margin: 0 0 32px 0;
+    }
+    .invite-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 32px;
+      text-align: left;
+    }
+    .info-row {
+      margin-bottom: 12px;
+    }
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
+    .info-label {
+      font-size: 12px;
+      color: #8E8E93;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .info-value {
+      font-size: 15px;
+      color: #FFFFFF;
+      font-weight: 500;
+    }
+    .cta-btn {
+      display: inline-block;
+      background: ${brandColor};
+      color: ${textColor} !important;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 14px 40px;
+      border-radius: 14px;
+      margin: 0 auto;
+      text-align: center;
+      box-shadow: 0 4px 14px ${brandColor}40;
+      transition: all 0.2s ease;
+    }
+    .cta-btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+    .footer {
+      padding: 32px;
+      text-align: center;
+      font-size: 12px;
+      color: #636366;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .footer a {
+      color: ${brandColor};
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="container">
+      <div class="brand-glow"></div>
+      <div class="content">
+        <div class="logo-container">
+          <img class="logo-img" src="${logoSrc}" alt="${tenant.name}">
+        </div>
+        
+        <span class="badge ${role === 'admin' ? 'badge-admin' : ''}">
+          ${role === 'admin' ? 'Co-Coordinator Invitation' : 'Tournament Invite'}
+        </span>
+        
+        <h1>Join the Arena</h1>
+        
+        <p class="subtitle">
+          You have been invited to join <strong>${tenant.name}</strong> as ${role === 'admin' ? 'an Administrator' : 'a Player'} on the Matchup platform.
+        </p>
+        
+        <div class="invite-box">
+          <div class="info-row">
+            <div class="info-label">Tournament Organization</div>
+            <div class="info-value">${tenant.name}</div>
+          </div>
+          <div class="info-row" style="margin-top: 16px;">
+            <div class="info-label">Your Role</div>
+            <div class="info-value" style="text-transform: capitalize; font-weight: 600; color: ${brandColor};">${role}</div>
+          </div>
+          <div class="info-row" style="margin-top: 16px;">
+            <div class="info-label">Recipient Email</div>
+            <div class="info-value" style="font-family: monospace;">${email}</div>
+          </div>
+        </div>
+        
+        <a href="${inviteLink}" class="cta-btn">Accept Invitation</a>
+      </div>
+      
+      <div class="footer">
+        This is an official invitation on behalf of the <strong>${tenant.name}</strong> league coordinators.<br>
+        If you didn't expect this invitation, you can safely ignore this email.<br><br>
+        Powered by <a href="${frontendUrl}">Matchup</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  return sendEmail([{ email }], subject, htmlContent);
 }

@@ -4,11 +4,13 @@ import { verifySession, requireRole, requireActive } from '../middleware/auth';
 
 const router = Router();
 
-// Helper to get active/latest tournament
-async function getActiveTournament() {
+// Helper to get active/latest tournament scoped by tenant
+async function getActiveTournament(tenantId?: string) {
+  const tId = tenantId || '00000000-0000-0000-0000-000000000000';
   const { data: active } = await supabaseAdmin
     .from('tournaments')
     .select('*')
+    .eq('tenant_id', tId)
     .neq('status', 'completed')
     .order('created_at', { ascending: false })
     .limit(1)
@@ -18,6 +20,7 @@ async function getActiveTournament() {
   const { data: completed } = await supabaseAdmin
     .from('tournaments')
     .select('*')
+    .eq('tenant_id', tId)
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
     .limit(1)
@@ -28,7 +31,7 @@ async function getActiveTournament() {
 // GET /reward — Retrieve active tournament reward
 router.get('/', verifySession, async (req: Request, res: Response) => {
   try {
-    const tournament = await getActiveTournament();
+    const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) {
       return res.json({ success: true, data: null });
     }
@@ -65,7 +68,7 @@ router.post('/', verifySession, requireActive, requireRole('admin'), async (req:
   }
 
   try {
-    const tournament = await getActiveTournament();
+    const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) {
       return res.status(404).json({ success: false, error: 'No active or latest tournament found to attach reward' });
     }
@@ -80,6 +83,7 @@ router.post('/', verifySession, requireActive, requireRole('admin'), async (req:
           image_url: image_url || null,
           cta_link: cta_link || null,
           cta_text: cta_text || null,
+          tenant_id: req.tenantId || '00000000-0000-0000-0000-000000000000',
         },
         { onConflict: 'tournament_id' }
       )

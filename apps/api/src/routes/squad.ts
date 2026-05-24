@@ -142,6 +142,7 @@ router.post('/', verifySession, requireActive, async (req: Request, res: Respons
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from('tournaments')
     .select('id, status')
+    .eq('tenant_id', req.tenantId || '00000000-0000-0000-0000-000000000000')
     .neq('status', 'completed')
     .order('created_at', { ascending: false })
     .limit(1)
@@ -221,6 +222,7 @@ router.post('/', verifySession, requireActive, async (req: Request, res: Respons
         positions: squadPositionsMapping,
         coordinates: coordinates || null,
         updated_at: new Date().toISOString(),
+        tenant_id: req.tenantId || '00000000-0000-0000-0000-000000000000',
       },
       { onConflict: 'claim_id' }
     )
@@ -255,6 +257,7 @@ router.post('/lock', verifySession, requireActive, async (req: Request, res: Res
     const { data: tournament, error: tErr } = await supabaseAdmin
       .from('tournaments')
       .select('id, status')
+      .eq('tenant_id', req.tenantId || '00000000-0000-0000-0000-000000000000')
       .neq('status', 'completed')
       .order('created_at', { ascending: false })
       .limit(1)

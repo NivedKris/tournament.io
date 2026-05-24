@@ -12,6 +12,11 @@ import SuspendedPage from './pages/SuspendedPage';
 import HomePage from './pages/HomePage';
 import SquadBuilderPage from './pages/SquadBuilderPage';
 import PublicProfilePage from './pages/PublicProfilePage';
+import InvitePage from './pages/InvitePage';
+import SelectTenantPage from './pages/SelectTenantPage';
+
+import { TenantProvider } from './components/TenantProvider';
+import SuperAdminPage from './pages/SuperAdminPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,25 +49,30 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Routes>
-          {/* Public routes */}
-          <Route element={<PublicLayout />}>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            <Route path="/complete-profile" element={<CompleteProfilePage />} />
-            <Route path="/suspended" element={<SuspendedPage />} />
-            <Route path="/profile/:claimId" element={<PublicProfilePage />} />
-          </Route>
+        <TenantProvider>
+          <Routes>
+            {/* Public routes */}
+            <Route element={<PublicLayout />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              <Route path="/complete-profile" element={<CompleteProfilePage />} />
+              <Route path="/suspended" element={<SuspendedPage />} />
+              <Route path="/profile/:claimId" element={<PublicProfilePage />} />
+              <Route path="/invite/:inviteId" element={<InvitePage />} />
+            </Route>
 
-          {/* Protected routes */}
-          <Route element={<ProtectedLayout />}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/squad-builder" element={<SquadBuilderPage />} />
-          </Route>
+            {/* Protected routes */}
+            <Route element={<ProtectedLayout />}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/squad-builder" element={<SquadBuilderPage />} />
+              <Route path="/super-admin" element={<SuperAdminPage />} />
+              <Route path="/select-tenant" element={<SelectTenantPage />} />
+            </Route>
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </TenantProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );

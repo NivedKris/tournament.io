@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import LoadingScreen from '../components/LoadingScreen';
+import api from '../lib/api';
 
 /**
  * Supabase redirects back to /auth/callback after Google OAuth.
@@ -24,8 +25,20 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      // Sync with backend — upserts user record
-      await loadSession();
+      let sessionData: any;
+      try {
+        sessionData = await loadSession();
+      } catch (err: any) {
+        console.error('[AuthCallback] Session load error:', err);
+        const backendErr = err.response?.data?.error;
+        if (backendErr === 'no_invitations') {
+          navigate('/login?error=no_invitation', { replace: true });
+        } else {
+          navigate('/login?error=session_sync_failed', { replace: true });
+        }
+        return;
+      }
+      localStorage.removeItem('oauth_tenant_slug');
 
       const { user, isNewUser } = useAuthStore.getState();
 
@@ -36,9 +49,21 @@ export default function AuthCallbackPage() {
 
       if (isNewUser || !user.username || user.username.startsWith('google_')) {
         navigate('/complete-profile', { replace: true });
-      } else {
-        navigate('/', { replace: true });
+        return;
       }
+
+      if (user.role === 'super_admin') {
+        navigate('/super-admin', { replace: true });
+        return;
+      }
+
+      // Check if multi-tenant selection is required
+      if (sessionData?.data?.requireTenantSelection) {
+        navigate('/select-tenant', { replace: true });
+        return;
+      }
+
+      navigate('/', { replace: true });
     };
 
     handle();

@@ -7,14 +7,15 @@ const router = Router();
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-async function getActiveTournament() {
+async function getActiveTournament(tenantId?: string) {
+  const tId = tenantId || '00000000-0000-0000-0000-000000000000';
   const { data: active } = await supabaseAdmin
-    .from('tournaments').select('*').neq('status', 'completed')
+    .from('tournaments').select('*').eq('tenant_id', tId).neq('status', 'completed')
     .order('created_at', { ascending: false }).limit(1).maybeSingle();
   if (active) return active;
 
   const { data: completed } = await supabaseAdmin
-    .from('tournaments').select('*').eq('status', 'completed')
+    .from('tournaments').select('*').eq('tenant_id', tId).eq('status', 'completed')
     .order('created_at', { ascending: false }).limit(1).maybeSingle();
   return completed;
 }
@@ -157,6 +158,7 @@ async function tryAutoAdvanceKnockout(match: any, winner_claim_id: string) {
     away_claim_id: evenSlotWinner,
     stage: 'knockout', round: next_round, bracket_slot: next_slot,
     status: 'scheduled', is_bye: false, is_prequal: false,
+    tenant_id: match.tenant_id,
   });
 }
 
@@ -164,7 +166,7 @@ async function tryAutoAdvanceKnockout(match: any, winner_claim_id: string) {
 
 router.get('/', verifySession, requireActive, async (req: Request, res: Response) => {
   try {
-    const tournament = await getActiveTournament();
+    const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) return res.json({ success: true, data: [] });
 
     let query = supabaseAdmin.from('matches').select(MATCH_SELECT)
