@@ -3455,12 +3455,6 @@ select option:disabled {
   background: #000;
 }
 
-@media (max-width: 768px) {
-  .cinematic-video {
-    object-fit: contain;
-  }
-}
-
 .cinematic-hud {
   position: absolute;
   bottom: 48px;

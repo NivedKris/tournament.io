@@ -439,6 +439,17 @@ export default function HomePage() {
 
   return (
     <div className="app-shell">
+      {tournament?.status === 'registration' && showClaimPicker && !claimedNation && introState !== 'done' && (
+        <TournamentIntroVideo
+          mode={tournament.mode}
+          onFinish={() => {
+            setIntroState('done');
+            const key = user?.id ? `has_watched_intro_tournament_${user.id}` : 'has_watched_intro_tournament';
+            sessionStorage.setItem(key, 'true');
+          }}
+        />
+      )}
+
       {tournament?.status === 'completed' && <CelebrationCanvas />}
 
       {tournament?.status === 'completed' && championClaim && (
@@ -1349,16 +1360,7 @@ export default function HomePage() {
             {/* Nation picker drawer */}
             {tournament.status === 'registration' && showClaimPicker && !claimedNation && (
               <div className={`claim-picker-section ${introState === 'done' ? 'fade-in-content' : ''}`}>
-                {introState !== 'done' ? (
-                  <TournamentIntroVideo
-                    mode={tournament.mode}
-                    onFinish={() => {
-                      setIntroState('done');
-                      const key = user?.id ? `has_watched_intro_tournament_${user.id}` : 'has_watched_intro_tournament';
-                      sessionStorage.setItem(key, 'true');
-                    }}
-                  />
-                ) : (
+                {introState === 'done' && (
                   <>
                     {user?.role === 'admin' && (
                       <button
