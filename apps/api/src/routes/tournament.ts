@@ -2,12 +2,14 @@ import { Router, Request, Response } from 'express';
 import { supabaseAdmin } from '../lib/supabase';
 import { verifySession, requireRole, requireActive } from '../middleware/auth';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { notifyPreQualsStarted, notifyGroupsStarted, notifyKnockoutsStarted } from '../services/email';
+import { getTournamentStatsRaw } from '../services/stats';
 
 const router = Router();
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-async function getActiveTournament() {
+export async function getActiveTournament() {
   const { data: active } = await supabaseAdmin
     .from('tournaments')
     .select('*')
@@ -245,6 +247,9 @@ router.post('/admin/draw-prequals', verifySession, requireRole('admin'), async (
     const { error: err4 } = await supabaseAdmin.from('tournaments').update({ status: 'pre_qual' }).eq('id', tournament.id);
     if (err4) throw err4;
 
+    // Trigger Pre-Qual notification emails in background
+    notifyPreQualsStarted(tournament.id, tournament.name);
+
     return res.json({
       success: true,
       data: { prequal_matches: matchesToInsert.length, auto_qualified: autoQualifyIds.length },
@@ -327,6 +332,9 @@ router.post('/admin/draw-groups', verifySession, requireRole('admin'), async (re
     }
     const { error: updateErr } = await supabaseAdmin.from('tournaments').update({ status: 'group_stage' }).eq('id', tournament.id);
     if (updateErr) throw updateErr;
+
+    // Trigger Group Stage notification emails in background
+    notifyGroupsStarted(tournament.id, tournament.name);
 
     return res.json({ success: true, data: { groups: sizes.length, matches: matchesToInsert.length, group_sizes: sizes } });
   } catch (err: any) {
@@ -538,6 +546,9 @@ router.post('/admin/start-knockouts', verifySession, requireRole('admin'), async
     const { error: updateErr } = await supabaseAdmin.from('tournaments').update({ status: 'knockout' }).eq('id', tournament.id);
     if (updateErr) throw updateErr;
 
+    // Trigger Knockout Stage notification emails in background
+    notifyKnockoutsStarted(tournament.id, tournament.name);
+
     return res.json({ success: true, data: { bracket_size: bracketSize, byes: numByes, matches: matchesToInsert.length } });
   } catch (err: any) {
     console.error('[start-knockouts]', err);
@@ -568,114 +579,8 @@ router.get('/stats', verifySession, requireActive, async (req: Request, res: Res
       });
     }
 
-    // 2. Fetch all match events for this tournament
-    const { data: matchesList } = await supabaseAdmin
-      .from('matches')
-      .select('id')
-      .eq('tournament_id', tournament.id);
-
-    const matchIds = matchesList?.map(m => m.id) || [];
-
-    let topScorers: any[] = [];
-    let topPlaymakers: any[] = [];
-    let topGoalkeepers: any[] = [];
-
-    if (matchIds.length > 0) {
-      // Fetch goals and assists
-      const { data: events, error: evErr } = await supabaseAdmin
-        .from('match_events')
-        .select('player_id, event_type, claim_id, player:players(*), claim:nation_claims(*, users(id, username, display_name), nations(id, name, flag_url))')
-        .in('match_id', matchIds);
-
-      if (evErr) {
-        console.error('Error fetching match events:', evErr);
-      }
-
-      const scorersMap: Record<string, { player: any; claim: any; count: number }> = {};
-      const playmakersMap: Record<string, { player: any; claim: any; count: number }> = {};
-
-      if (events) {
-        for (const item of events) {
-          const pid = String(item.player_id);
-          const detail = {
-            player: item.player,
-            claim: item.claim,
-            count: 0
-          };
-          if (item.event_type === 'goal') {
-            if (!scorersMap[pid]) scorersMap[pid] = detail;
-            scorersMap[pid].count++;
-          } else if (item.event_type === 'assist') {
-            if (!playmakersMap[pid]) playmakersMap[pid] = detail;
-            playmakersMap[pid].count++;
-          }
-        }
-      }
-
-      topScorers = Object.values(scorersMap).sort((a, b) => b.count - a.count);
-      topPlaymakers = Object.values(playmakersMap).sort((a, b) => b.count - a.count);
-
-      // Fetch goalkeeper stats
-      const { data: claims } = await supabaseAdmin
-        .from('nation_claims')
-        .select('id, nation_id, nations(id, name, flag_url), users(id, username, display_name)')
-        .eq('tournament_id', tournament.id);
-
-      const { data: squads } = await supabaseAdmin
-        .from('squads')
-        .select('claim_id, positions')
-        .eq('tournament_id', tournament.id);
-
-      const { data: verifiedMatches } = await supabaseAdmin
-        .from('matches')
-        .select('*')
-        .eq('tournament_id', tournament.id)
-        .eq('status', 'verified');
-
-      if (claims && squads) {
-        const gkPlayerIds = squads.map(s => s.positions?.GK).filter(Boolean) as number[];
-        
-        let gkPlayers: any[] = [];
-        if (gkPlayerIds.length > 0) {
-          const { data: dbGks } = await supabaseAdmin
-            .from('players')
-            .select('*')
-            .in('id', gkPlayerIds);
-          gkPlayers = dbGks || [];
-        }
-
-        const gkStats = claims.map(claim => {
-          const squad = squads.find(s => s.claim_id === claim.id);
-          const gkId = squad?.positions?.GK;
-          const gkPlayer = gkPlayers.find(p => String(p.id) === String(gkId));
-          
-          if (!gkPlayer) return null;
-
-          const teamMatches = verifiedMatches?.filter(m => m.home_claim_id === claim.id || m.away_claim_id === claim.id) || [];
-          let cleanSheets = 0;
-          let goalsConceded = 0;
-
-          for (const m of teamMatches) {
-            const opponentGoals = m.home_claim_id === claim.id ? m.away_score : m.home_score;
-            if (opponentGoals === 0) cleanSheets++;
-            goalsConceded += opponentGoals || 0;
-          }
-
-          return {
-            player: gkPlayer,
-            claim,
-            cleanSheets,
-            goalsConceded,
-            matchesPlayed: teamMatches.length
-          };
-        }).filter(Boolean);
-
-        topGoalkeepers = (gkStats as any[]).sort((a, b) => {
-          if (b.cleanSheets !== a.cleanSheets) return b.cleanSheets - a.cleanSheets;
-          return a.goalsConceded - b.goalsConceded; // secondary sort: fewer goals conceded
-        });
-      }
-    }
+    // 2. Fetch stats using the stats service
+    const { topScorers, topPlaymakers, topGoalkeepers } = await getTournamentStatsRaw(tournament.id);
 
     // 3. Generate AI sports news summary paragraph
     let aiSummary = 'Live statistics are being compiled. Goalkeeping and goalscorer leaderboards will appear here as match results are verified.';

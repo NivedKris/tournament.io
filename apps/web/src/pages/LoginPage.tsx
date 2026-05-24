@@ -20,7 +20,6 @@ export default function LoginPage() {
           <div className="login-wordmark">
             <span>MATCH</span><span className="up">UP</span>
           </div>
-          <p className="login-tagline">eFootball tournament platform</p>
         </div>
 
         <div className="login-actions" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -34,23 +33,19 @@ export default function LoginPage() {
             Continue with Google
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--gray-600)', fontSize: '0.75rem' }}>
-            <div style={{ flex: 1, height: 1, background: 'var(--border)' }}/>
-            <span>OR</span>
-            <div style={{ flex: 1, height: 1, background: 'var(--border)' }}/>
-          </div>
-
-          <button
-            id="guest-login-btn"
-            className="btn btn-secondary"
-            onClick={() => navigate('/login/guest')}
-          >
-            Continue as Guest (Testing)
-          </button>
-
-          <p className="login-footer">
+          <p className="login-footer" style={{ marginTop: 8 }}>
             By continuing, you agree to participate fairly<br />in the tournament.
           </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20, width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)', fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Built by</span>
+              <img src="/mark.png" alt="MARK.ORG" style={{ height: 16, width: 'auto', opacity: 0.85 }} />
+            </div>
+            <p style={{ fontSize: '0.68rem', color: 'var(--gray-700)', letterSpacing: '0.01em', marginTop: 4 }}>
+              © {new Date().getFullYear()} MARK.ORG. All rights reserved.
+            </p>
+          </div>
         </div>
 
       </div>

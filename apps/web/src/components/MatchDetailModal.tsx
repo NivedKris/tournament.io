@@ -51,6 +51,7 @@ interface MatchDetails {
   }>;
   home_claim: ClaimInfo | null;
   away_claim: ClaimInfo | null;
+  dispute?: any;
 }
 
 interface Message {
@@ -102,7 +103,7 @@ export default function MatchDetailModal({
   const [awaySquadPlayers, setAwaySquadPlayers] = useState<any[]>([]);
 
   // Admin events state
-  const [adminEvents, setAdminEvents] = useState<Array<{ claim_id: string; player_id: number; event_type: 'goal' | 'assist' }>>([]);
+  const [adminEvents, setAdminEvents] = useState<Array<{ claim_id: string; scorer_id: number; assister_id: number | null }>>([]);
 
   // File upload helper
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,11 +231,25 @@ export default function MatchDetailModal({
       setAdminHomePens(match.home_pens !== null ? match.home_pens.toString() : '');
       setAdminAwayPens(match.away_pens !== null ? match.away_pens.toString() : '');
       if (match.events) {
-        setAdminEvents(match.events.map(e => ({
-          claim_id: e.claim_id,
-          player_id: e.player_id,
-          event_type: e.event_type
-        })));
+        const parsed: Array<{ claim_id: string; scorer_id: number; assister_id: number | null }> = [];
+        const teams = Array.from(new Set(match.events.map(e => e.claim_id)));
+
+        for (const teamId of teams) {
+          const teamGoals = match.events.filter(e => e.claim_id === teamId && e.event_type === 'goal');
+          const teamAssists = match.events.filter(e => e.claim_id === teamId && e.event_type === 'assist');
+
+          const maxCount = Math.max(teamGoals.length, teamAssists.length);
+          for (let i = 0; i < maxCount; i++) {
+            const goal = teamGoals[i];
+            const assist = teamAssists[i];
+            parsed.push({
+              claim_id: teamId,
+              scorer_id: goal ? goal.player_id : 0,
+              assister_id: assist ? assist.player_id : null,
+            });
+          }
+        }
+        setAdminEvents(parsed);
       }
     }
   }, [match]);
@@ -420,8 +435,25 @@ export default function MatchDetailModal({
       return;
     }
 
-    const validEvents = adminEvents.filter(e => e.claim_id && e.player_id);
-    const payload: any = { home_score: hs, away_score: as_, events: validEvents };
+    const flatEvents: Array<{ claim_id: string; player_id: number; event_type: 'goal' | 'assist' }> = [];
+    for (const ev of adminEvents) {
+      if (!ev.claim_id) continue;
+      if (ev.scorer_id) {
+        flatEvents.push({
+          claim_id: ev.claim_id,
+          player_id: ev.scorer_id,
+          event_type: 'goal'
+        });
+      }
+      if (ev.assister_id) {
+        flatEvents.push({
+          claim_id: ev.claim_id,
+          player_id: ev.assister_id,
+          event_type: 'assist'
+        });
+      }
+    }
+    const payload: any = { home_score: hs, away_score: as_, events: flatEvents };
     if (hs === as_ && (match.stage === 'pre_qual' || match.stage === 'knockout')) {
       const hp = parseInt(adminHomePens);
       const ap = parseInt(adminAwayPens);
@@ -547,8 +579,25 @@ export default function MatchDetailModal({
         payload.away_pens = ap;
       }
 
-      const validEvents = adminEvents.filter(e => e.claim_id && e.player_id);
-      payload.events = validEvents;
+      const flatEvents: Array<{ claim_id: string; player_id: number; event_type: 'goal' | 'assist' }> = [];
+      for (const ev of adminEvents) {
+        if (!ev.claim_id) continue;
+        if (ev.scorer_id) {
+          flatEvents.push({
+            claim_id: ev.claim_id,
+            player_id: ev.scorer_id,
+            event_type: 'goal'
+          });
+        }
+        if (ev.assister_id) {
+          flatEvents.push({
+            claim_id: ev.claim_id,
+            player_id: ev.assister_id,
+            event_type: 'assist'
+          });
+        }
+      }
+      payload.events = flatEvents;
     }
 
     try {
@@ -1168,86 +1217,93 @@ export default function MatchDetailModal({
                             </div>
                           )}
 
-                        {/* Admin Match Events Override */}
-                        <div className="form-group mt-4" style={{ marginTop: '12px' }}>
+                               <div className="form-group mt-4" style={{ marginTop: '12px' }}>
                           <label className="block text-sm font-semibold mb-2" style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', fontWeight: '600', color: 'rgba(255,255,255,0.7)' }}>
-                            Scorer / Assister Events
+                            Goals & Assists
                           </label>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {adminEvents.map((event, index) => (
-                              <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <select
-                                  value={event.claim_id}
-                                  onChange={(e) => {
-                                    const updated = [...adminEvents];
-                                    updated[index].claim_id = e.target.value;
-                                    updated[index].player_id = 0;
-                                    setAdminEvents(updated);
-                                  }}
-                                  className="form-input"
-                                  style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
-                                  required
-                                >
-                                  <option value="">Select Team</option>
-                                  {match.home_claim && <option value={match.home_claim_id}>{match.home_claim.nations?.name} (Home)</option>}
-                                  {match.away_claim && <option value={match.away_claim_id}>{match.away_claim.nations?.name} (Away)</option>}
-                                </select>
+                            {adminEvents.map((event, index) => {
+                              const squadPlayers = event.claim_id === match.home_claim_id ? homeSquadPlayers : awaySquadPlayers;
+                              return (
+                                <div key={index} style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '10px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  {/* Row 1: Team picker + remove */}
+                                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <select
+                                      value={event.claim_id}
+                                      onChange={(e) => {
+                                        const updated = [...adminEvents];
+                                        updated[index] = { ...updated[index], claim_id: e.target.value, scorer_id: 0, assister_id: null };
+                                        setAdminEvents(updated);
+                                      }}
+                                      className="form-input"
+                                      style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 10px', borderRadius: '8px', fontSize: '0.875rem' }}
+                                    >
+                                      <option value="">Select team</option>
+                                      {match.home_claim && <option value={match.home_claim_id}>{match.home_claim.nations?.name} (Home)</option>}
+                                      {match.away_claim && <option value={match.away_claim_id}>{match.away_claim.nations?.name} (Away)</option>}
+                                    </select>
+                                    <button
+                                      type="button"
+                                      onClick={() => setAdminEvents(adminEvents.filter((_, i) => i !== index))}
+                                      style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                    </button>
+                                  </div>
 
-                                <select
-                                  value={event.event_type}
-                                  onChange={(e) => {
-                                    const updated = [...adminEvents];
-                                    updated[index].event_type = e.target.value as 'goal' | 'assist';
-                                    setAdminEvents(updated);
-                                  }}
-                                  className="form-input"
-                                  style={{ width: '90px', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
-                                  required
-                                >
-                                  <option value="goal">Goal ⚽</option>
-                                  <option value="assist">Assist 👟</option>
-                                </select>
-
-                                <select
-                                  value={event.player_id || ''}
-                                  onChange={(e) => {
-                                    const updated = [...adminEvents];
-                                    updated[index].player_id = parseInt(e.target.value);
-                                    setAdminEvents(updated);
-                                  }}
-                                  className="form-input"
-                                  style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
-                                  required
-                                  disabled={!event.claim_id}
-                                >
-                                  <option value="">Select Player</option>
-                                  {(event.claim_id === match.home_claim_id ? homeSquadPlayers : awaySquadPlayers).map((p: any) => (
-                                    <option key={p.id} value={p.id}>
-                                      {p.name} ({p.overall})
-                                    </option>
-                                  ))}
-                                </select>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setAdminEvents(adminEvents.filter((_, i) => i !== index));
-                                  }}
-                                  className="btn btn-danger"
-                                  style={{ padding: '4px 8px', borderRadius: '4px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer' }}
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            ))}
+                                  {/* Row 2: Scorer + Assister selects */}
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                    <div>
+                                      <p style={{ margin: '0 0 4px', fontSize: '0.72rem', fontWeight: '600', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Scorer</p>
+                                      <select
+                                        value={event.scorer_id || ''}
+                                        onChange={(e) => {
+                                          const updated = [...adminEvents];
+                                          updated[index] = { ...updated[index], scorer_id: parseInt(e.target.value) || 0 };
+                                          setAdminEvents(updated);
+                                        }}
+                                        className="form-input"
+                                        style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 10px', borderRadius: '8px', fontSize: '0.875rem' }}
+                                        disabled={!event.claim_id}
+                                      >
+                                        <option value="">Select scorer</option>
+                                        {squadPlayers.map((p: any) => (
+                                          <option key={p.id} value={p.id}>{p.name} ({p.overall})</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <p style={{ margin: '0 0 4px', fontSize: '0.72rem', fontWeight: '600', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Assist <span style={{ color: 'rgba(255,255,255,0.2)', fontWeight: '400' }}>(optional)</span></p>
+                                      <select
+                                        value={event.assister_id || ''}
+                                        onChange={(e) => {
+                                          const updated = [...adminEvents];
+                                          updated[index] = { ...updated[index], assister_id: parseInt(e.target.value) || null };
+                                          setAdminEvents(updated);
+                                        }}
+                                        className="form-input"
+                                        style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 10px', borderRadius: '8px', fontSize: '0.875rem' }}
+                                        disabled={!event.claim_id}
+                                      >
+                                        <option value="">None</option>
+                                        {squadPlayers.filter((p: any) => p.id !== event.scorer_id).map((p: any) => (
+                                          <option key={p.id} value={p.id}>{p.name} ({p.overall})</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                           <button
                             type="button"
-                            onClick={() => setAdminEvents([...adminEvents, { claim_id: '', player_id: 0, event_type: 'goal' }])}
-                            className="btn btn-secondary mt-2"
-                            style={{ padding: '6px 12px', fontSize: '0.85rem', marginTop: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', cursor: 'pointer' }}
+                            onClick={() => setAdminEvents([...adminEvents, { claim_id: '', scorer_id: 0, assister_id: null }])}
+                            style={{ marginTop: '8px', width: '100%', padding: '10px', borderRadius: '8px', border: '1.5px dashed rgba(255,255,255,0.12)', background: 'transparent', color: 'rgba(255,255,255,0.45)', fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                            onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.7)'; }}
+                            onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.45)'; }}
                           >
-                            + Add Goal/Assist Event
+                            + Add Goal Override
                           </button>
                         </div>
 
@@ -1331,80 +1387,88 @@ export default function MatchDetailModal({
                           Force Registered Goals & Assists
                         </label>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          {adminEvents.map((event, index) => (
-                            <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                              <select
-                                  value={event.claim_id}
-                                  onChange={(e) => {
-                                    const updated = [...adminEvents];
-                                    updated[index].claim_id = e.target.value;
-                                    updated[index].player_id = 0;
-                                    setAdminEvents(updated);
-                                  }}
-                                  className="form-input"
-                                  style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
-                                  required
-                                >
-                                  <option value="">Select Team</option>
-                                  {match.home_claim && <option value={match.home_claim_id}>{match.home_claim.nations?.name} (Home)</option>}
-                                  {match.away_claim && <option value={match.away_claim_id}>{match.away_claim.nations?.name} (Away)</option>}
-                                </select>
+                          {adminEvents.map((event, index) => {
+                            const squadPlayers = event.claim_id === match.home_claim_id ? homeSquadPlayers : awaySquadPlayers;
+                            return (
+                              <div key={index} style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '10px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {/* Row 1: Team picker + remove */}
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                  <select
+                                    value={event.claim_id}
+                                    onChange={(e) => {
+                                      const updated = [...adminEvents];
+                                      updated[index] = { ...updated[index], claim_id: e.target.value, scorer_id: 0, assister_id: null };
+                                      setAdminEvents(updated);
+                                    }}
+                                    className="form-input"
+                                    style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 10px', borderRadius: '8px', fontSize: '0.875rem' }}
+                                  >
+                                    <option value="">Select team</option>
+                                    {match.home_claim && <option value={match.home_claim_id}>{match.home_claim.nations?.name} (Home)</option>}
+                                    {match.away_claim && <option value={match.away_claim_id}>{match.away_claim.nations?.name} (Away)</option>}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAdminEvents(adminEvents.filter((_, i) => i !== index))}
+                                    style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                  </button>
+                                </div>
 
-                                <select
-                                  value={event.event_type}
-                                  onChange={(e) => {
-                                    const updated = [...adminEvents];
-                                    updated[index].event_type = e.target.value as 'goal' | 'assist';
-                                    setAdminEvents(updated);
-                                  }}
-                                  className="form-input"
-                                  style={{ width: '90px', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
-                                  required
-                                >
-                                  <option value="goal">Goal ⚽</option>
-                                  <option value="assist">Assist 👟</option>
-                                </select>
-
-                                <select
-                                  value={event.player_id || ''}
-                                  onChange={(e) => {
-                                    const updated = [...adminEvents];
-                                    updated[index].player_id = parseInt(e.target.value);
-                                    setAdminEvents(updated);
-                                  }}
-                                  className="form-input"
-                                  style={{ flex: 1, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '6px', borderRadius: '4px' }}
-                                  required
-                                  disabled={!event.claim_id}
-                                >
-                                  <option value="">Select Player</option>
-                                  {(event.claim_id === match.home_claim_id ? homeSquadPlayers : awaySquadPlayers).map((p: any) => (
-                                    <option key={p.id} value={p.id}>
-                                      {p.name} ({p.overall})
-                                    </option>
-                                  ))}
-                                </select>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setAdminEvents(adminEvents.filter((_, i) => i !== index));
-                                }}
-                                className="btn btn-danger"
-                                style={{ padding: '4px 8px', borderRadius: '4px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer' }}
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ))}
+                                {/* Row 2: Scorer + Assister selects */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                  <div>
+                                    <p style={{ margin: '0 0 4px', fontSize: '0.72rem', fontWeight: '600', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Scorer</p>
+                                    <select
+                                      value={event.scorer_id || ''}
+                                      onChange={(e) => {
+                                        const updated = [...adminEvents];
+                                        updated[index] = { ...updated[index], scorer_id: parseInt(e.target.value) || 0 };
+                                        setAdminEvents(updated);
+                                      }}
+                                      className="form-input"
+                                      style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 10px', borderRadius: '8px', fontSize: '0.875rem' }}
+                                      disabled={!event.claim_id}
+                                    >
+                                      <option value="">Select scorer</option>
+                                      {squadPlayers.map((p: any) => (
+                                        <option key={p.id} value={p.id}>{p.name} ({p.overall})</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <p style={{ margin: '0 0 4px', fontSize: '0.72rem', fontWeight: '600', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Assist <span style={{ color: 'rgba(255,255,255,0.2)', fontWeight: '400' }}>(optional)</span></p>
+                                    <select
+                                      value={event.assister_id || ''}
+                                      onChange={(e) => {
+                                        const updated = [...adminEvents];
+                                        updated[index] = { ...updated[index], assister_id: parseInt(e.target.value) || null };
+                                        setAdminEvents(updated);
+                                      }}
+                                      className="form-input"
+                                      style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 10px', borderRadius: '8px', fontSize: '0.875rem' }}
+                                      disabled={!event.claim_id}
+                                    >
+                                      <option value="">None</option>
+                                      {squadPlayers.filter((p: any) => p.id !== event.scorer_id).map((p: any) => (
+                                        <option key={p.id} value={p.id}>{p.name} ({p.overall})</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                         <button
                           type="button"
-                          onClick={() => setAdminEvents([...adminEvents, { claim_id: '', player_id: 0, event_type: 'goal' }])}
-                          className="btn btn-secondary mt-2"
-                          style={{ padding: '6px 12px', fontSize: '0.85rem', marginTop: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', cursor: 'pointer' }}
+                          onClick={() => setAdminEvents([...adminEvents, { claim_id: '', scorer_id: 0, assister_id: null }])}
+                          style={{ marginTop: '8px', width: '100%', padding: '10px', borderRadius: '8px', border: '1.5px dashed rgba(255,255,255,0.12)', background: 'transparent', color: 'rgba(255,255,255,0.45)', fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                          onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.7)'; }}
+                          onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.45)'; }}
                         >
-                          + Add Goal/Assist Event
+                          + Add Goal Override
                         </button>
                       </div>
 

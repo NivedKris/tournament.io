@@ -56,6 +56,10 @@ router.post('/session', async (req: Request, res: Response) => {
     .maybeSingle();
 
   if (existingById) {
+    if (!existingById.email && user.email) {
+      await supabaseAdmin.from('users').update({ email: user.email }).eq('id', user.id);
+      existingById.email = user.email;
+    }
     return res.json({ success: true, data: { user: existingById, is_new: false } });
   }
 
@@ -72,7 +76,7 @@ router.post('/session', async (req: Request, res: Response) => {
     // Thanks to ON UPDATE CASCADE, this propagates to referencing tables automatically.
     const { data: updated, error: updateErr } = await supabaseAdmin
       .from('users')
-      .update({ id: user.id })
+      .update({ id: user.id, email: user.email || '' })
       .eq('google_id', googleId)
       .select()
       .single();
@@ -92,6 +96,7 @@ router.post('/session', async (req: Request, res: Response) => {
     .insert({
       id: user.id,
       google_id: googleId,
+      email: user.email || '',
       display_name: user.user_metadata?.full_name ?? '',
       username: `google_${user.id.replace(/-/g, '').substring(0, 10)}`, // Must be completed via /auth/complete-profile
       role: 'player',
@@ -101,6 +106,17 @@ router.post('/session', async (req: Request, res: Response) => {
     .single();
 
   if (createErr) {
+    if (createErr.code === '23505') {
+      // Handle race condition where a concurrent request inserted the user record first
+      const { data: reFetched } = await supabaseAdmin
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (reFetched) {
+        return res.json({ success: true, data: { user: reFetched, is_new: true } });
+      }
+    }
     console.error('[auth/session] Failed to create user:', createErr);
     return res.status(500).json({ success: false, error: 'Failed to create user record' });
   }

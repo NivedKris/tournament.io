@@ -6,7 +6,6 @@ import { useAuthStore } from './stores/authStore';
 
 import { PublicLayout, ProtectedLayout } from './layouts';
 import LoginPage from './pages/LoginPage';
-import GuestLoginPage from './pages/GuestLoginPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import CompleteProfilePage from './pages/CompleteProfilePage';
 import SuspendedPage from './pages/SuspendedPage';
@@ -49,7 +48,6 @@ export default function App() {
           {/* Public routes */}
           <Route element={<PublicLayout />}>
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/login/guest" element={<GuestLoginPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/complete-profile" element={<CompleteProfilePage />} />
             <Route path="/suspended" element={<SuspendedPage />} />

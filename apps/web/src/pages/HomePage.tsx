@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import api from '../lib/api';
@@ -8,6 +8,7 @@ import KnockoutBracket from '../components/KnockoutBracket';
 import MatchDetailModal from '../components/MatchDetailModal';
 import TournamentStatsTab from '../components/TournamentStatsTab';
 import CelebrationCanvas from '../components/CelebrationCanvas';
+import AdminNotificationDrawer from '../components/AdminNotificationDrawer';
 
 interface Tournament {
   id: string;
@@ -85,6 +86,7 @@ export default function HomePage() {
   // Reward states
   const [reward, setReward] = useState<any | null>(null);
   const [showRewardsPanel, setShowRewardsPanel] = useState(false);
+  const [showNotificationDrawer, setShowNotificationDrawer] = useState(false);
   const [rewardName, setRewardName] = useState('');
   const [rewardImageUrl, setRewardImageUrl] = useState('');
   const [rewardCtaLink, setRewardCtaLink] = useState('');
@@ -92,6 +94,18 @@ export default function HomePage() {
   const [rewardIsSaving, setRewardIsSaving] = useState(false);
   const [rewardUploadError, setRewardUploadError] = useState<string | null>(null);
   const [rewardSaveSuccess, setRewardSaveSuccess] = useState(false);
+  const [introState, setIntroState] = useState<'splash' | 'playing' | 'done'>(() => {
+    const key = user?.id ? `has_watched_intro_tournament_${user.id}` : 'has_watched_intro_tournament';
+    return sessionStorage.getItem(key) === 'true' ? 'done' : 'splash';
+  });
+
+  useEffect(() => {
+    if (user?.id) {
+      const key = `has_watched_intro_tournament_${user.id}`;
+      const watched = sessionStorage.getItem(key) === 'true';
+      setIntroState(watched ? 'done' : 'splash');
+    }
+  }, [user?.id]);
 
   const loadData = async () => {
     try {
@@ -388,14 +402,12 @@ export default function HomePage() {
 
   // Find champion name and claim if tournament is complete
   const finalMatch = matches.find((m) => m.stage === 'knockout' && m.round === 1);
-  let championName = '';
   let championClaim: any = null;
   if (tournament?.status === 'completed' && finalMatch && finalMatch.status === 'verified') {
     const hs = finalMatch.home_score ?? 0;
     const as_ = finalMatch.away_score ?? 0;
     const winner = hs > as_ ? 'home' : (as_ > hs ? 'away' : ((finalMatch.home_pens ?? 0) >= (finalMatch.away_pens ?? 0) ? 'home' : 'away'));
     championClaim = winner === 'home' ? finalMatch.home_claim : finalMatch.away_claim;
-    championName = championClaim?.nations?.name ?? '';
   }
 
   return (
@@ -906,33 +918,59 @@ export default function HomePage() {
                     <h3>Admin Operations</h3>
                     <span className="console-subtitle">Tournament Management Panel</span>
                   </div>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setShowRewardsPanel(!showRewardsPanel)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      background: showRewardsPanel ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      color: '#fff',
-                      fontSize: '0.8rem',
-                      fontWeight: '600',
-                      borderRadius: '8px',
-                      padding: '6px 12px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 12 20 22 4 22 4 12" />
-                      <rect x="2" y="7" width="20" height="5" />
-                      <line x1="12" y1="22" x2="12" y2="7" />
-                      <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
-                      <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
-                    </svg>
-                    {showRewardsPanel ? 'Close Rewards' : 'Manage Rewards'}
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setShowNotificationDrawer(true)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        color: '#fff',
+                        fontSize: '0.8rem',
+                        fontWeight: '600',
+                        borderRadius: '8px',
+                        padding: '6px 12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                        <polyline points="22,6 12,13 2,6" />
+                      </svg>
+                      Notifications
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setShowRewardsPanel(!showRewardsPanel)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: showRewardsPanel ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        color: '#fff',
+                        fontSize: '0.8rem',
+                        fontWeight: '600',
+                        borderRadius: '8px',
+                        padding: '6px 12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 12 20 22 4 22 4 12" />
+                        <rect x="2" y="7" width="20" height="5" />
+                        <line x1="12" y1="22" x2="12" y2="7" />
+                        <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+                        <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+                      </svg>
+                      {showRewardsPanel ? 'Close Rewards' : 'Manage Rewards'}
+                    </button>
+                  </div>
                 </div>
 
                 {adminError && <div className="form-error mb-4">{adminError}</div>}
@@ -1261,22 +1299,35 @@ export default function HomePage() {
 
             {/* Nation picker drawer */}
             {tournament.status === 'registration' && showClaimPicker && !claimedNation && (
-              <div className="claim-picker-section">
-                {user?.role === 'admin' && (
-                  <button
-                    className="btn btn-secondary btn-sm mb-4"
-                    onClick={() => setShowClaimPicker(false)}
-                  >
-                    ← Back to Admin Console
-                  </button>
+              <div className={`claim-picker-section ${introState === 'done' ? 'fade-in-content' : ''}`}>
+                {introState !== 'done' ? (
+                  <TournamentIntroVideo
+                    mode={tournament.mode}
+                    onFinish={() => {
+                      setIntroState('done');
+                      const key = user?.id ? `has_watched_intro_tournament_${user.id}` : 'has_watched_intro_tournament';
+                      sessionStorage.setItem(key, 'true');
+                    }}
+                  />
+                ) : (
+                  <>
+                    {user?.role === 'admin' && (
+                      <button
+                        className="btn btn-secondary btn-sm mb-4"
+                        onClick={() => setShowClaimPicker(false)}
+                      >
+                        ← Back to Admin Console
+                      </button>
+                    )}
+                    <NationPicker
+                      nations={nations}
+                      onClaimSuccess={() => {
+                        setShowClaimPicker(false);
+                        loadData();
+                      }}
+                    />
+                  </>
                 )}
-                <NationPicker
-                  nations={nations}
-                  onClaimSuccess={() => {
-                    setShowClaimPicker(false);
-                    loadData();
-                  }}
-                />
               </div>
             )}
 
@@ -1497,6 +1548,172 @@ export default function HomePage() {
         />
       )}
 
+      {/* Admin Notification Drawer */}
+      <AdminNotificationDrawer
+        isOpen={showNotificationDrawer}
+        onClose={() => setShowNotificationDrawer(false)}
+        tournamentStatus={tournament?.status}
+      />
+
+    </div>
+  );
+}
+
+interface TournamentIntroVideoProps {
+  mode: 'world_cup' | 'ucl' | string;
+  onFinish: () => void;
+}
+
+function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+  const [playError, setPlayError] = useState(false);
+
+  const videoUrl = mode === 'ucl' ? '/ucl.mp4' : '/wc.mp4';
+
+  // Try to autoplay on mount
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const startPlayback = async () => {
+      try {
+        // Attempt playing with sound first (unmuted)
+        video.muted = false;
+        setIsMuted(false);
+        await video.play();
+      } catch (err) {
+        console.warn("Autoplay with sound prevented, falling back to muted autoplay", err);
+        try {
+          // Fallback to muted playback
+          video.muted = true;
+          setIsMuted(true);
+          await video.play();
+          setPlayError(true); // show tap to unmute indicator
+        } catch (fallbackErr) {
+          console.error("Muted playback failed too", fallbackErr);
+        }
+      }
+    };
+
+    startPlayback();
+  }, []);
+
+  // Handle skip with sound fade and class fade
+  const handleSkip = () => {
+    if (isFadingOut) return;
+    setIsFadingOut(true);
+
+    const video = videoRef.current;
+    if (video) {
+      // Fade out volume smoothly
+      let currentVolume = video.volume;
+      const fadeAudio = setInterval(() => {
+        if (video && currentVolume > 0.05) {
+          currentVolume -= 0.05;
+          video.volume = Math.max(0, currentVolume);
+        } else {
+          clearInterval(fadeAudio);
+        }
+      }, 50);
+    }
+
+    // Wait for the CSS opacity transition to finish (1.5s)
+    setTimeout(() => {
+      onFinish();
+    }, 1500);
+  };
+
+  // Toggle Mute / Unmute
+  const toggleMute = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation(); // prevent triggering double tap on fast click
+    }
+    const video = videoRef.current;
+    if (video) {
+      video.muted = !video.muted;
+      setIsMuted(video.muted);
+      if (!video.muted) {
+        setPlayError(false); // cleared since user successfully unmuted
+      }
+    }
+  };
+
+  // Double tap handler for mobile
+  const lastTapRef = useRef<number>(0);
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      e.preventDefault();
+      handleSkip();
+    } else {
+      // Single tap toggles mute/unmute
+      toggleMute();
+    }
+    lastTapRef.current = now;
+  };
+
+  // Single click toggles mute, double click skips
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (e.detail === 2) {
+      // Double click
+      handleSkip();
+    } else if (e.detail === 1) {
+      // Single click
+      toggleMute();
+    }
+  };
+
+  return (
+    <div 
+      className={`cinematic-intro-overlay ${isFadingOut ? 'fade-out' : ''}`}
+      onClick={handleOverlayClick}
+      onTouchEnd={handleTouchEnd}
+      style={{ cursor: 'pointer' }}
+    >
+      <video
+        ref={videoRef}
+        className="cinematic-video"
+        src={videoUrl}
+        playsInline
+        onEnded={handleSkip}
+      />
+
+      <div className="cinematic-hud">
+        {/* Playback status buttons */}
+        <button 
+          type="button" 
+          className="cinematic-btn-hud" 
+          onClick={toggleMute}
+        >
+          {isMuted ? (
+            <>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: 'translateY(1px)' }}>
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+              Unmute
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: 'translateY(1px)' }}>
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+              Mute
+            </>
+          )}
+        </button>
+
+        {/* Action hints */}
+        <div className="cinematic-hint-hud">
+          {playError && <span style={{ color: '#F5C842' }}>🔇 Muted • Tap to unmute •</span>}
+          <span>Double-tap to skip</span>
+        </div>
+      </div>
     </div>
   );
 }

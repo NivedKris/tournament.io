@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { supabaseAdmin } from '../lib/supabase';
 import { verifySession, requireActive, requireRole } from '../middleware/auth';
+import { notifyTournamentWinner } from '../services/email';
 
 const router = Router();
 
@@ -103,14 +104,18 @@ export async function resolveAfterVerified(matchId: string) {
       }
     }
   } else if (match.stage === 'knockout') {
-    // Eliminate loser (unless it's a BYE)
+    // Eliminate loser and set winner to qualified (unless it's a BYE)
     if (!match.is_bye) {
       await supabaseAdmin.from('nation_claims').update({ status: 'eliminated' }).eq('id', loser_claim_id);
+      await supabaseAdmin.from('nation_claims').update({ status: 'qualified' }).eq('id', winner_claim_id);
     }
 
     // Is this the final?
     if (match.round === 1) {
       await supabaseAdmin.from('tournaments').update({ status: 'completed' }).eq('id', match.tournament_id);
+      const { data: tData } = await supabaseAdmin.from('tournaments').select('name').eq('id', match.tournament_id).maybeSingle();
+      const tName = tData ? tData.name : 'Tournament';
+      notifyTournamentWinner(match.tournament_id, tName);
     } else {
       // Auto-generate next round match if both sibling matches are verified
       await tryAutoAdvanceKnockout(match, winner_claim_id);
@@ -355,7 +360,6 @@ router.post('/admin/:id/verify', verifySession, requireRole('admin'), async (req
   try {
     const { data: match } = await supabaseAdmin.from('matches').select(MATCH_SELECT).eq('id', req.params.id).maybeSingle();
     if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
-    if (match.status === 'verified') return res.status(400).json({ success: false, error: 'Match is already verified' });
 
     const { home_score, away_score, home_pens, away_pens, screenshot_url, events } = req.body as {
       home_score?: number;

@@ -12,6 +12,7 @@ import matchRouter from './routes/match';
 import uploadRouter from './routes/upload';
 import disputeRouter from './routes/dispute';
 import rewardRouter from './routes/reward';
+import notificationRouter from './routes/notification';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -57,6 +58,7 @@ app.use('/matches', matchRouter);
 app.use('/matches', disputeRouter);
 app.use('/upload', uploadRouter);
 app.use('/reward', rewardRouter);
+app.use('/notification', notificationRouter);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Health check
