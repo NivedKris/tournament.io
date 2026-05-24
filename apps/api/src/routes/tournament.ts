@@ -8,14 +8,23 @@ const router = Router();
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 async function getActiveTournament() {
-  const { data } = await supabaseAdmin
+  const { data: active } = await supabaseAdmin
     .from('tournaments')
     .select('*')
     .neq('status', 'completed')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data;
+  if (active) return active;
+
+  const { data: completed } = await supabaseAdmin
+    .from('tournaments')
+    .select('*')
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return completed;
 }
 
 /** Determine the winner of a verified match. Requires home_score/away_score to be set. */
@@ -102,10 +111,38 @@ router.post('/admin/create', verifySession, requireRole('admin'), async (req: Re
 });
 
 router.get('/current', async (_req: Request, res: Response) => {
-  const { data: tournaments, error } = await supabaseAdmin
-    .from('tournaments').select('*').neq('status', 'completed').order('created_at', { ascending: false });
-  if (error) return res.status(500).json({ success: false, error: 'Failed to fetch active tournament' });
-  return res.json({ success: true, data: tournaments?.[0] ?? null });
+  try {
+    // 1. First look for active tournament (status not completed)
+    const { data: active, error: activeErr } = await supabaseAdmin
+      .from('tournaments')
+      .select('*')
+      .neq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activeErr) throw activeErr;
+
+    if (active) {
+      return res.json({ success: true, data: active });
+    }
+
+    // 2. If no active tournament, check for the most recently completed tournament
+    const { data: completed, error: compErr } = await supabaseAdmin
+      .from('tournaments')
+      .select('*')
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (compErr) throw compErr;
+
+    return res.json({ success: true, data: completed ?? null });
+  } catch (err: any) {
+    console.error('[GET /current]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to fetch tournament' });
+  }
 });
 
 router.get('/nations', async (_req: Request, res: Response) => {

@@ -48,15 +48,41 @@ router.post('/session', async (req: Request, res: Response) => {
     return res.status(401).json({ success: false, error: 'Invalid access token' });
   }
 
-  // Check if user record already exists
-  const { data: existing } = await supabaseAdmin
+  // Check if user record already exists by id
+  const { data: existingById } = await supabaseAdmin
     .from('users')
     .select('*')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
-  if (existing) {
-    return res.json({ success: true, data: { user: existing, is_new: false } });
+  if (existingById) {
+    return res.json({ success: true, data: { user: existingById, is_new: false } });
+  }
+
+  // Check if user record already exists by google_id
+  const googleId = user.user_metadata?.sub ?? user.id;
+  const { data: existingByGoogle } = await supabaseAdmin
+    .from('users')
+    .select('*')
+    .eq('google_id', googleId)
+    .maybeSingle();
+
+  if (existingByGoogle) {
+    // Sync the UUID in public.users to match the new one from Supabase Auth.
+    // Thanks to ON UPDATE CASCADE, this propagates to referencing tables automatically.
+    const { data: updated, error: updateErr } = await supabaseAdmin
+      .from('users')
+      .update({ id: user.id })
+      .eq('google_id', googleId)
+      .select()
+      .single();
+
+    if (updateErr) {
+      console.error('[auth/session] Failed to sync user ID:', updateErr);
+      return res.status(500).json({ success: false, error: 'Failed to sync user ID record' });
+    }
+
+    return res.json({ success: true, data: { user: updated, is_new: false } });
   }
 
   // First login — create a partial record (no username/display_name yet)
@@ -65,7 +91,7 @@ router.post('/session', async (req: Request, res: Response) => {
     .from('users')
     .insert({
       id: user.id,
-      google_id: user.user_metadata?.sub ?? user.id,
+      google_id: googleId,
       display_name: user.user_metadata?.full_name ?? '',
       username: `google_${user.id.replace(/-/g, '').substring(0, 10)}`, // Must be completed via /auth/complete-profile
       role: 'player',

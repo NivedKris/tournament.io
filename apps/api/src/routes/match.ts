@@ -7,10 +7,15 @@ const router = Router();
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 async function getActiveTournament() {
-  const { data } = await supabaseAdmin
+  const { data: active } = await supabaseAdmin
     .from('tournaments').select('*').neq('status', 'completed')
     .order('created_at', { ascending: false }).limit(1).maybeSingle();
-  return data;
+  if (active) return active;
+
+  const { data: completed } = await supabaseAdmin
+    .from('tournaments').select('*').eq('status', 'completed')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return completed;
 }
 
 function getMatchWinner(match: any): 'home' | 'away' {

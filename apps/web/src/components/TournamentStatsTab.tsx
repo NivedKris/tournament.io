@@ -98,6 +98,8 @@ function PlayerRow({
   statValue,
   accentColor,
   statSecondary,
+  isAwardWinner,
+  awardType,
 }: {
   idx: number;
   name: string;
@@ -108,21 +110,27 @@ function PlayerRow({
   statValue: string | number;
   accentColor: string;
   statSecondary?: string;
+  isAwardWinner?: boolean;
+  awardType?: 'boot' | 'assist' | 'glove';
 }) {
   const { text: rankTextColor } = rankColor(idx);
   const isTop3 = idx < 3;
 
   return (
     <div
+      className={isAwardWinner ? 'award-winner-row' : ''}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
         padding: '10px 12px',
         borderRadius: '10px',
-        background: isTop3 ? 'rgba(255,255,255,0.04)' : 'transparent',
-        border: `1px solid ${isTop3 ? 'rgba(255,255,255,0.08)' : 'transparent'}`,
-        transition: 'background 0.15s ease',
+        background: isAwardWinner 
+          ? `linear-gradient(90deg, ${accentColor}12, rgba(255,255,255,0.02))`
+          : (isTop3 ? 'rgba(255,255,255,0.04)' : 'transparent'),
+        border: `1px solid ${isAwardWinner ? `${accentColor}40` : (isTop3 ? 'rgba(255,255,255,0.08)' : 'transparent')}`,
+        transition: 'background 0.15s ease, border-color 0.15s ease',
+        boxShadow: isAwardWinner ? `0 0 12px ${accentColor}08` : 'none',
       }}
     >
       {/* Rank */}
@@ -153,6 +161,7 @@ function PlayerRow({
             objectFit: 'cover',
             background: 'rgba(255,255,255,0.06)',
             display: 'block',
+            border: isAwardWinner ? `1.5px solid ${accentColor}` : 'none',
           }}
           onError={(e) => {
             const el = e.target as HTMLImageElement;
@@ -162,7 +171,7 @@ function PlayerRow({
               const fb = document.createElement('div');
               fb.className = 'avatar-fallback';
               fb.style.cssText =
-                'width:36px;height:36px;borderRadius:50%;background:rgba(255,255,255,0.06);display:flex;alignItems:center;justifyContent:center;fontSize:13px;fontWeight:600;color:rgba(255,255,255,0.4);';
+                `width:36px;height:36px;borderRadius:50%;background:rgba(255,255,255,0.06);display:flex;alignItems:center;justifyContent:center;fontSize:13px;fontWeight:600;color:rgba(255,255,255,0.4);${isAwardWinner ? `border:1.5px solid ${accentColor};` : ''}`;
               fb.textContent = name.charAt(0).toUpperCase();
               parent.appendChild(fb);
             }
@@ -189,19 +198,36 @@ function PlayerRow({
 
       {/* Info */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flex: 1, minWidth: 0 }}>
-        <span
-          style={{
-            color: '#fff',
-            fontSize: '0.875rem',
-            fontWeight: '600',
-            letterSpacing: '-0.01em',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {name}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span
+            style={{
+              color: isAwardWinner ? '#fff' : 'rgba(255,255,255,0.9)',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              letterSpacing: '-0.01em',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {name}
+          </span>
+          {isAwardWinner && awardType === 'boot' && (
+            <span title="Golden Boot Winner" style={{ display: 'inline-flex', color: '#F5C842', animation: 'awardPulse 2s infinite' }}>
+              <IconBoot size={13} color="#F5C842" />
+            </span>
+          )}
+          {isAwardWinner && awardType === 'assist' && (
+            <span title="Playmaker Award Winner" style={{ display: 'inline-flex', color: '#818cf8', animation: 'awardPulse 2s infinite' }}>
+              <IconAssist size={13} color="#818cf8" />
+            </span>
+          )}
+          {isAwardWinner && awardType === 'glove' && (
+            <span title="Golden Glove Winner" style={{ display: 'inline-flex', color: '#34d399', animation: 'awardPulse 2s infinite' }}>
+              <IconGlove size={13} color="#34d399" />
+            </span>
+          )}
+        </div>
         <span
           style={{
             color: 'rgba(255,255,255,0.38)',
@@ -381,6 +407,10 @@ export default function TournamentStatsTab() {
     );
   }
 
+  const maxGoals = stats.topScorers[0]?.count ?? 0;
+  const maxAssists = stats.topPlaymakers[0]?.count ?? 0;
+  const maxCleanSheets = stats.topGoalkeepers[0]?.cleanSheets ?? 0;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
@@ -504,10 +534,12 @@ export default function TournamentStatsTab() {
               statLabel="G"
               statValue={row.count}
               accentColor="#F5C842"
+              isAwardWinner={row.count === maxGoals && maxGoals > 0}
+              awardType="boot"
             />
           ))}
         </LeaderboardPanel>
-
+ 
         {/* Top Assists */}
         <LeaderboardPanel
           title="Top Assists"
@@ -528,10 +560,12 @@ export default function TournamentStatsTab() {
               statLabel="A"
               statValue={row.count}
               accentColor="#818cf8"
+              isAwardWinner={row.count === maxAssists && maxAssists > 0}
+              awardType="assist"
             />
           ))}
         </LeaderboardPanel>
-
+ 
         {/* Golden Glove */}
         <LeaderboardPanel
           title="Golden Glove"
@@ -553,16 +587,22 @@ export default function TournamentStatsTab() {
               statValue={row.cleanSheets}
               accentColor="#34d399"
               statSecondary={`${row.goalsConceded} conceded`}
+              isAwardWinner={row.cleanSheets === maxCleanSheets && maxCleanSheets > 0}
+              awardType="glove"
             />
           ))}
         </LeaderboardPanel>
       </div>
-
-      {/* ── Inline keyframes for live pulse ────────────────────────────── */}
+ 
+      {/* ── Inline keyframes for live pulse and awards ────────────────── */}
       <style>{`
         @keyframes livePulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0.5); }
           50%       { box-shadow: 0 0 0 5px rgba(52,211,153,0); }
+        }
+        @keyframes awardPulse {
+          0%, 100% { transform: scale(1); filter: drop-shadow(0 0 1px currentColor); }
+          50%       { transform: scale(1.18); filter: drop-shadow(0 0 5px currentColor); }
         }
       `}</style>
     </div>
