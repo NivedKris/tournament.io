@@ -70,7 +70,7 @@ export default function AuthCallbackPage() {
             Sign In Successful
           </h2>
           <p style={{ fontSize: '0.9rem', color: 'var(--gray-400)', maxWidth: 300 }}>
-            Enter the Arena!
+
           </p>
         </div>
 
