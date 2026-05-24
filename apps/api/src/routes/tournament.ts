@@ -632,4 +632,28 @@ ${topGoalkeepers.slice(0, 3).map(g => `- ${g.player?.name || 'Unknown'} (${g.cla
   }
 });
 
+router.post('/admin/reset', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const tournament = await getActiveTournament();
+    if (!tournament) {
+      return res.status(404).json({ success: false, error: 'No active or completed tournament found to reset' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('tournaments')
+      .delete()
+      .eq('id', tournament.id);
+
+    if (error) {
+      console.error('[POST /admin/reset] Supabase error:', error);
+      return res.status(500).json({ success: false, error: 'Failed to reset tournament database records' });
+    }
+
+    return res.json({ success: true, message: 'Tournament has been successfully reset from scratch.' });
+  } catch (err: any) {
+    console.error('[POST /admin/reset]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to reset tournament' });
+  }
+});
+
 export default router;

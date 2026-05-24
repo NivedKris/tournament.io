@@ -318,6 +318,33 @@ export default function HomePage() {
     }
   };
 
+  // Reset Tournament
+  const handleResetTournament = async () => {
+    const confirmReset = window.confirm(
+      "WARNING: This will permanently delete the current tournament, all players' claims, matches, squads, messages, disputes, and rewards. This action CANNOT be undone.\n\nAre you sure you want to completely reset the tournament and start from scratch?"
+    );
+    if (!confirmReset) return;
+
+    setIsAdminActionLoading(true);
+    setAdminError(null);
+    try {
+      const res = await api.post('/tournament/admin/reset');
+      if (res.data.success) {
+        const key = user?.id ? `has_watched_intro_tournament_${user.id}` : 'has_watched_intro_tournament';
+        sessionStorage.removeItem(key);
+        // Reset states
+        setShowClaimPicker(true);
+        setIntroState('splash');
+        // Force reload home page data
+        await loadData();
+      }
+    } catch (err: any) {
+      setAdminError(err.response?.data?.error || 'Failed to reset tournament');
+    } finally {
+      setIsAdminActionLoading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="loading-screen">
@@ -1054,6 +1081,28 @@ export default function HomePage() {
                       Join Tournament as Player
                     </button>
                   )}
+
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleResetTournament}
+                    disabled={isAdminActionLoading}
+                    style={{
+                      borderColor: 'rgba(239, 68, 68, 0.25)',
+                      color: '#ef4444',
+                      background: 'rgba(239, 68, 68, 0.04)',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)';
+                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.04)';
+                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+                    }}
+                  >
+                    Reset Tournament
+                  </button>
                 </div>
 
                 {/* Admin Rewards Panel */}
