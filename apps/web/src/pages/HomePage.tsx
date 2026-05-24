@@ -71,7 +71,7 @@ export default function HomePage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [standingsData, setStandingsData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [showClaimPicker, setShowClaimPicker] = useState(user?.role !== 'admin');
   const [activeTab, setActiveTab] = useState<TabType>('fixtures');
   const [fixtureFilter, setFixtureFilter] = useState<'all' | 'my'>('all');
@@ -225,7 +225,7 @@ export default function HomePage() {
   const handleRewardImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
-    
+
     setRewardUploadError(null);
     const formData = new FormData();
     formData.append('file', file);
@@ -343,7 +343,7 @@ export default function HomePage() {
     }
 
     const tStatus = tournament.status;
-    
+
     // Live status only applies during active group stage or pre-qual
     if (tStatus === 'group_stage') {
       if (standingsData.groups) {
@@ -413,7 +413,7 @@ export default function HomePage() {
   return (
     <div className="app-shell">
       {tournament?.status === 'completed' && <CelebrationCanvas />}
-      
+
       {tournament?.status === 'completed' && championClaim && (
         <div
           className="floating-celebration-banner"
@@ -498,7 +498,7 @@ export default function HomePage() {
           </div>
         </div>
       )}
-      
+
       {/* Celebration Styles */}
       <style>{`
         @keyframes goldGlowPulse {
@@ -553,7 +553,7 @@ export default function HomePage() {
           border-color: rgba(255, 255, 255, 0.15) !important;
         }
       `}</style>
-      
+
       {/* Navbar */}
       <nav className="navbar">
         <div className="nav-brand">
@@ -577,7 +577,7 @@ export default function HomePage() {
 
       {/* Main Container */}
       <div className="page-content">
-        
+
         {/* No Tournament State */}
         {!tournament ? (
           <div className="no-tournament-container">
@@ -591,7 +591,7 @@ export default function HomePage() {
               <div className="admin-setup-card">
                 <h3>KICK OFF A TOURNAMENT</h3>
                 <p className="subtitle">Initialize the catalog of nations/clubs and open registrations.</p>
-                
+
                 <form onSubmit={handleCreateTournament} className="profile-form">
                   <div className="form-group">
                     <label>Tournament Name</label>
@@ -632,7 +632,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="active-tournament-dashboard">
-            
+
             {/* Phase Banner */}
             <div className="dashboard-header-card">
               <span className={`tournament-phase-banner banner-${tournament.status}`}>
@@ -661,7 +661,7 @@ export default function HomePage() {
               </div>
 
               {reward && (
-                <div 
+                <div
                   className="tournament-reward-banner animate-slide-down"
                   style={{
                     marginTop: '16px',
@@ -678,7 +678,7 @@ export default function HomePage() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-                    <div 
+                    <div
                       style={{
                         width: '36px',
                         height: '36px',
@@ -712,12 +712,12 @@ export default function HomePage() {
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     {reward.image_url && (
-                      <div 
-                        style={{ 
-                          width: '42px', 
-                          height: '42px', 
-                          borderRadius: '8px', 
-                          overflow: 'hidden', 
+                      <div
+                        style={{
+                          width: '42px',
+                          height: '42px',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
                           border: '1px solid rgba(255, 255, 255, 0.1)',
                           boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
                           cursor: 'pointer',
@@ -728,9 +728,9 @@ export default function HomePage() {
                         onClick={() => window.open(reward.image_url, '_blank')}
                         title="View Full Reward Image"
                       >
-                        <img 
-                          src={reward.image_url} 
-                          alt="Reward" 
+                        <img
+                          src={reward.image_url}
+                          alt="Reward"
                           style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s' }}
                           className="reward-thumb-img"
                         />
@@ -738,9 +738,9 @@ export default function HomePage() {
                     )}
 
                     {reward.cta_link && (
-                      <a 
-                        href={reward.cta_link} 
-                        target="_blank" 
+                      <a
+                        href={reward.cta_link}
+                        target="_blank"
                         rel="noopener noreferrer"
                         style={{
                           fontSize: '0.78rem',
@@ -763,7 +763,7 @@ export default function HomePage() {
               )}
 
               {tournament.status === 'completed' && championClaim && (
-                <div 
+                <div
                   className="champion-celebration-card"
                   style={{
                     background: 'rgba(255, 215, 0, 0.05)',
@@ -783,7 +783,7 @@ export default function HomePage() {
                     animation: 'goldGlowPulse 3s infinite alternate',
                   }}
                 >
-                  <div 
+                  <div
                     style={{
                       position: 'absolute',
                       top: '-50%',
@@ -797,7 +797,7 @@ export default function HomePage() {
                   />
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px', zIndex: 1, minWidth: 0 }}>
-                    <div 
+                    <div
                       style={{
                         width: '56px',
                         height: '56px',
@@ -841,9 +841,9 @@ export default function HomePage() {
                         <path d="M 48 65 L 49.5 67 L 51.5 67.5 L 49.5 68 L 48 70 L 46.5 69 L 44.5 67.5 L 46.5 67 Z" fill="#FFF" opacity="0.95" />
                       </svg>
                     </div>
-                    
+
                     <div style={{ minWidth: 0 }}>
-                      <span 
+                      <span
                         style={{
                           fontSize: '0.7rem',
                           fontWeight: '700',
@@ -856,7 +856,7 @@ export default function HomePage() {
                       >
                         Tournament Champion
                       </span>
-                      <h2 
+                      <h2
                         style={{
                           margin: 0,
                           fontSize: '1.4rem',
@@ -871,9 +871,9 @@ export default function HomePage() {
                       </h2>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                         {championClaim.nations?.flag_url && (
-                          <img 
-                            src={championClaim.nations.flag_url} 
-                            alt="" 
+                          <img
+                            src={championClaim.nations.flag_url}
+                            alt=""
                             style={{ width: '18px', height: '12px', borderRadius: '1px', objectFit: 'cover' }}
                           />
                         )}
@@ -1228,7 +1228,7 @@ export default function HomePage() {
                     <h4 style={{ fontSize: '0.9rem', fontWeight: '700', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '14px' }}>
                       Start Next Tournament
                     </h4>
-                    
+
                     <form onSubmit={handleCreateTournament} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'rgba(255,255,255,0.45)' }}>Tournament Name</label>
@@ -1341,7 +1341,7 @@ export default function HomePage() {
                   >
                     Fixtures
                   </button>
-                  
+
                   {standingsData && (
                     <button
                       className={`tab-link ${activeTab === 'standings' ? 'active' : ''}`}
@@ -1394,7 +1394,7 @@ export default function HomePage() {
                         const scoreText = isVerified
                           ? `${m.home_score} – ${m.away_score}`
                           : 'VS';
-                        
+
                         return (
                           <div
                             key={m.id}
@@ -1404,7 +1404,7 @@ export default function HomePage() {
                             <span className="fixture-stage-label font-mono">
                               {m.stage === 'pre_qual' ? 'Pre-Qual' : m.stage === 'group' ? `Group ${m.group_name}` : `Round of ${m.round}`}
                             </span>
-                            
+
                             <div className="fixture-main-row">
                               <div className="fixture-team home">
                                 <span className="team-name truncate">{m.home_claim?.nations?.name ?? 'TBD'}</span>
@@ -1655,7 +1655,7 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
   };
 
   return (
-    <div 
+    <div
       className={`cinematic-intro-overlay ${isFadingOut ? 'fade-out' : ''}`}
       onClick={handleOverlayClick}
       onTouchEnd={handleTouchEnd}
@@ -1670,20 +1670,10 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
       />
 
       {playError && (
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, zIndex: 100001 }}>
-          <button 
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 100001 }}>
+          <button
             type="button"
-            className="btn btn-primary"
-            style={{
-              background: mode === 'ucl' ? '#3b82f6' : '#F5C842',
-              borderColor: mode === 'ucl' ? '#3b82f6' : '#F5C842',
-              color: '#000',
-              fontWeight: 700,
-              fontSize: '1rem',
-              padding: '14px 28px',
-              borderRadius: 'var(--r-md)',
-              boxShadow: '0 0 30px rgba(255,255,255,0.1)'
-            }}
+            className={`cinematic-play-btn ${mode === 'ucl' ? 'ucl-accent' : 'wc-accent'}`}
             onClick={(e) => {
               e.stopPropagation();
               const video = videoRef.current;
@@ -1696,16 +1686,19 @@ function TournamentIntroVideo({ mode, onFinish }: TournamentIntroVideoProps) {
               }
             }}
           >
-            ▶ Play Anthem
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ transform: 'translateX(1px)' }}>
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Enter Tournament
           </button>
         </div>
       )}
 
       <div className="cinematic-hud">
         {/* Playback status buttons */}
-        <button 
-          type="button" 
-          className="cinematic-btn-hud" 
+        <button
+          type="button"
+          className="cinematic-btn-hud"
           onClick={toggleMute}
         >
           {isMuted ? (
