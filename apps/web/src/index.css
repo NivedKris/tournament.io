@@ -1831,6 +1831,29 @@ select option:disabled {
   gap: 20px;
   margin-bottom: 24px;
 }
+.console-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.console-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .console-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .console-actions {
+    width: 100%;
+  }
+}
 
 .console-header h3 {
   font-size: 1.125rem;
@@ -3579,4 +3602,41 @@ select option:disabled {
               inset 0 1px 0 rgba(255, 255, 255, 0.3),
               0 0 30px rgba(245, 200, 66, 0.45);
 }
+
+/* Responsive Invite Card Styling */
+.invite-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 40px 24px;
+  box-sizing: border-box;
+  background: var(--bg);
+}
+
+.invite-card {
+  width: 100%;
+  max-width: 440px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 24px;
+  padding: 48px 36px;
+  text-align: center;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+  animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  margin: 0 auto;
+}
+
+@media (max-width: 480px) {
+  .invite-container {
+    padding: 24px 16px;
+  }
+  .invite-card {
+    padding: 32px 20px;
+    border-radius: 20px;
+  }
+}
+
 

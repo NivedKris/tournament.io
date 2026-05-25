@@ -71,8 +71,8 @@ export default function InvitePage() {
 
   if (error || !details) {
     return (
-      <div className="login-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', padding: 24 }}>
-        <div className="login-card" style={{ maxWidth: 420, textAlign: 'center' }}>
+      <div className="invite-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
+        <div className="invite-card">
           <div style={{
             background: 'rgba(239, 68, 68, 0.08)',
             border: '1px solid rgba(239, 68, 68, 0.2)',
@@ -105,9 +105,9 @@ export default function InvitePage() {
   const tenantLogo = details.tenant.logo_url || '/logo.png';
 
   return (
-    <div className="login-page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', padding: '40px 24px' }}>
+    <div className="invite-container">
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-        <div className="login-card" style={{ maxWidth: 440, padding: '40px 32px', textAlign: 'center' }}>
+        <div className="invite-card">
           
           {/* Tenant Logo */}
           <div style={{ marginBottom: 24 }}>

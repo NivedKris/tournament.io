@@ -1055,12 +1055,12 @@ export default function HomePage() {
             {/* Admin Console Card */}
             {isTenantAdmin && (
               <div className="admin-console-card">
-                <div className="console-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="console-header">
                   <div>
                     <h3>Admin Operations</h3>
                     <span className="console-subtitle">Tournament Management Panel</span>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div className="console-actions">
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => setShowNotificationDrawer(true)}

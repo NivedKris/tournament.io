@@ -312,6 +312,21 @@ router.post('/lock', verifySession, requireActive, async (req: Request, res: Res
       });
     }
 
+    // Validate that all 15 substitute slots (SUB_1 through SUB_15) are filled
+    const missingSubs: string[] = [];
+    for (let i = 1; i <= 15; i++) {
+      const subKey = `SUB_${i}`;
+      if (!squad.positions[subKey]) {
+        missingSubs.push(`SUB ${i}`);
+      }
+    }
+    if (missingSubs.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot lock squad: missing substitute players for: ${missingSubs.join(', ')}`,
+      });
+    }
+
     // 5. Perform the lock
     const { data: lockedSquad, error: lockErr } = await supabaseAdmin
       .from('squads')

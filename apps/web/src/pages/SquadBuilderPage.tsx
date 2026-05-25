@@ -376,7 +376,29 @@ export default function SquadBuilderPage() {
   }, []);
 
   const handleLock = async () => {
-    if (!window.confirm("Are you sure you want to LOCK your squad? Once locked, you cannot modify, swap, or search for players, and your formation is final for this tournament. Please ensure your starting XI is complete.")) {
+    // 1. Verify starting XI is fully populated
+    const reqPositions = PRESETS[formation] ? Object.keys(PRESETS[formation]) : [];
+    const missingPositions = reqPositions.filter(pos => !positions[pos]);
+
+    // 2. Verify all 15 substitutes are fully populated
+    const missingSubs = SUBS.filter(subKey => !positions[subKey]);
+
+    if (missingPositions.length > 0 || missingSubs.length > 0) {
+      let errMsg = "Cannot lock squad: Your squad is incomplete. ";
+      const parts = [];
+      if (missingPositions.length > 0) {
+        parts.push(`missing starting positions: ${missingPositions.join(', ')}`);
+      }
+      if (missingSubs.length > 0) {
+        parts.push(`missing substitute slots: ${missingSubs.map(s => s.replace('SUB_', 'SUB ')).join(', ')}`);
+      }
+      errMsg += parts.join(' and ') + ". Please fill all slots before locking.";
+      setLockError(errMsg);
+      alert(errMsg);
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to LOCK your squad? Once locked, you cannot modify, swap, or search for players, and your formation is final for this tournament.")) {
       return;
     }
 
