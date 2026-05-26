@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { supabaseAdmin } from '../lib/supabase';
 import { verifySession, requireRole } from '../middleware/auth';
+import { sendAdminAddedEmail } from '../services/email';
 
 const router = Router();
 
@@ -110,6 +111,18 @@ router.post('/tenants', async (req: Request, res: Response) => {
           tenant_id: newTenant.id
         })
         .eq('id', existingUser.id);
+    }
+
+    // Dispatch designation email to the new administrator
+    try {
+      await sendAdminAddedEmail(admin_email.trim().toLowerCase(), {
+        name: newTenant.name,
+        slug: newTenant.slug,
+        logo_url: newTenant.logo_url,
+        primary_color: newTenant.primary_color
+      });
+    } catch (emailErr) {
+      console.error('[super-admin/tenants] Error dispatching designation email:', emailErr);
     }
 
     return res.status(201).json({ success: true, data: newTenant });
