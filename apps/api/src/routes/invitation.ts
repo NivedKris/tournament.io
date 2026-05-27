@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { supabaseAdmin } from '../lib/supabase';
+import { supabaseAdmin, getFrontendUrl } from '../lib/supabase';
 import { verifySession } from '../middleware/auth';
 import { sendTenantInvitationEmail } from '../services/email';
 
@@ -148,7 +148,7 @@ router.post('/', verifySession, async (req: Request, res: Response) => {
       await sendTenantInvitationEmail(normalizedEmail, invite.id, tenant, role);
     } else {
       // Fallback log
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const frontendUrl = getFrontendUrl(req);
       const inviteLink = `${frontendUrl}/invite/${invite.id}`;
       console.log('\n========================================');
       console.log('[MOCK EMAIL SENT]');
@@ -224,7 +224,7 @@ router.post('/bulk', verifySession, async (req: Request, res: Response) => {
         }
       })();
     } else {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const frontendUrl = getFrontendUrl(req);
       console.log('\n========================================');
       console.log(`[MOCK BULK EMAILS SENT] Count: ${inserted.length}`);
       for (const inv of inserted) {

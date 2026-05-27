@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { supabaseAdmin } from '../lib/supabase';
+import { supabaseAdmin, getFrontendUrl } from '../lib/supabase';
 import { verifySession, requireRole } from '../middleware/auth';
 import { getActiveTournament } from './tournament';
 import { sendEmail, queueEmails, EmailRecipient } from '../services/email';
@@ -134,7 +134,7 @@ router.post('/admin/remind-pending', verifySession, requireRole('admin'), async 
       return res.json({ success: true, message: 'No registered players found with pending matches.' });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl(req);
 
     // Dispatch emails sequentially in background
     queueEmails(
@@ -248,7 +248,7 @@ router.post('/admin/broadcast', verifySession, requireRole('admin'), async (req:
       return res.json({ success: true, message: 'No registered players with emails found in the current tournament.' });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl(req);
 
     queueEmails(
       users.map(u => ({ email: u.email!, name: u.display_name, username: u.username })),
@@ -362,7 +362,7 @@ router.post('/admin/notify-winner', verifySession, requireRole('admin'), async (
       username: winnerUser.username,
     };
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl(req);
 
     const mailHtml = `
       <!DOCTYPE html>

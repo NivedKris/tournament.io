@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { supabaseAdmin } from '../lib/supabase';
+import { supabaseAdmin, getFrontendUrl } from '../lib/supabase';
 import { getTournamentStatsRaw } from './stats';
 
 dotenv.config();
@@ -151,7 +151,7 @@ export async function notifyPreQualsStarted(tournamentId: string, tournamentName
     const recipients = Array.from(userFixtures.values());
     if (recipients.length === 0) return;
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl();
 
     queueEmails(
       recipients.map(r => r.recipient),
@@ -266,7 +266,7 @@ export async function notifyGroupsStarted(tournamentId: string, tournamentName: 
     const recipients = Array.from(userFixtures.values());
     if (recipients.length === 0) return;
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl();
 
     queueEmails(
       recipients.map(r => r.recipient),
@@ -385,7 +385,7 @@ export async function notifyKnockoutsStarted(tournamentId: string, tournamentNam
     const recipients = Array.from(userFixtures.values());
     if (recipients.length === 0) return;
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl();
 
     queueEmails(
       recipients.map(r => r.recipient),
@@ -485,7 +485,7 @@ export async function notifyTournamentWinner(tournamentId: string, tournamentNam
       ? `${winnerUser?.display_name || `@${winnerUser?.username}`} playing as ${winnerNation?.name}`
       : 'TBD';
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl();
 
     queueEmails(
       users.map(u => ({ email: u.email!, name: u.display_name, username: u.username })),
@@ -581,7 +581,7 @@ export async function sendTenantInvitationEmail(
   tenant: { name: string; slug: string; logo_url: string | null; primary_color: string },
   role: 'player' | 'admin'
 ): Promise<boolean> {
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const frontendUrl = getFrontendUrl();
   const inviteLink = `${frontendUrl}/invite/${inviteId}`;
   
   const brandColor = tenant.primary_color || '#007aff'; // Default Apple blue

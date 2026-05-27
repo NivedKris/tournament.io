@@ -42,3 +42,20 @@ export function buildAuthClient() {
     },
   });
 }
+
+/**
+ * Returns the correct frontend URL, falling back to Vercel deployment URL or localhost.
+ */
+export function getFrontendUrl(req?: any): string {
+  if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  if (req) {
+    const host = typeof req.get === 'function' ? req.get('host') : req.headers?.host;
+    if (host) {
+      const protocol = req.secure || req.headers?.['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+      return `${protocol}://${host}`;
+    }
+  }
+  return 'http://localhost:5173';
+}
+
