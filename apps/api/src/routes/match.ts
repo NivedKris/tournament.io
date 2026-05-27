@@ -196,6 +196,10 @@ router.get('/:id', verifySession, requireActive, async (req: Request, res: Respo
   const { data: match, error } = await supabaseAdmin.from('matches').select(MATCH_SELECT).eq('id', req.params.id).maybeSingle();
   if (error || !match) return res.status(404).json({ success: false, error: 'Match not found' });
 
+  if (match.tenant_id !== req.tenantId) {
+    return res.status(403).json({ success: false, error: 'Access denied: Match belongs to another organization' });
+  }
+
   // Fetch events for this match
   const { data: events } = await supabaseAdmin
     .from('match_events')
@@ -222,6 +226,10 @@ router.post('/:id/submit-score', verifySession, requireActive, async (req: Reque
   try {
     const { data: match, error } = await supabaseAdmin.from('matches').select(MATCH_SELECT).eq('id', req.params.id).maybeSingle();
     if (error || !match) return res.status(404).json({ success: false, error: 'Match not found' });
+
+    if (match.tenant_id !== req.tenantId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Match belongs to another organization' });
+    }
 
     const uid = req.user!.id;
     if (!isParticipant(match, uid)) return res.status(403).json({ success: false, error: 'You are not a participant in this match' });
@@ -338,6 +346,10 @@ router.post('/:id/confirm-score', verifySession, requireActive, async (req: Requ
     const { data: match } = await supabaseAdmin.from('matches').select(MATCH_SELECT).eq('id', req.params.id).maybeSingle();
     if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
 
+    if (match.tenant_id !== req.tenantId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Match belongs to another organization' });
+    }
+
     const uid = req.user!.id;
     if (!isParticipant(match, uid)) return res.status(403).json({ success: false, error: 'You are not a participant in this match' });
     if (match.status !== 'pending_verification') return res.status(400).json({ success: false, error: `Match is ${match.status}, not pending verification` });
@@ -362,6 +374,10 @@ router.post('/admin/:id/verify', verifySession, requireRole('admin'), async (req
   try {
     const { data: match } = await supabaseAdmin.from('matches').select(MATCH_SELECT).eq('id', req.params.id).maybeSingle();
     if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
+
+    if (match.tenant_id !== req.tenantId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Match belongs to another organization' });
+    }
 
     const { home_score, away_score, home_pens, away_pens, screenshot_url, events } = req.body as {
       home_score?: number;
@@ -449,8 +465,12 @@ router.post('/admin/:id/verify', verifySession, requireRole('admin'), async (req
 
 router.post('/admin/:id/reset', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { data: match } = await supabaseAdmin.from('matches').select('id,status').eq('id', req.params.id).maybeSingle();
+    const { data: match } = await supabaseAdmin.from('matches').select('id,status,tenant_id').eq('id', req.params.id).maybeSingle();
     if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
+
+    if (match.tenant_id !== req.tenantId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Match belongs to another organization' });
+    }
 
     // Clean up events
     await supabaseAdmin.from('match_events').delete().eq('match_id', match.id);
@@ -476,6 +496,10 @@ router.get('/:id/messages', verifySession, requireActive, async (req: Request, r
     const { data: match } = await supabaseAdmin.from('matches').select(MATCH_SELECT).eq('id', req.params.id).maybeSingle();
     if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
 
+    if (match.tenant_id !== req.tenantId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Match belongs to another organization' });
+    }
+
     const uid = req.user!.id;
     const isAdmin = req.user!.role === 'admin';
     if (!isParticipant(match, uid) && !isAdmin) return res.status(403).json({ success: false, error: 'Not authorized to view this match chat' });
@@ -497,6 +521,10 @@ router.post('/:id/messages', verifySession, requireActive, async (req: Request, 
   try {
     const { data: match } = await supabaseAdmin.from('matches').select(MATCH_SELECT).eq('id', req.params.id).maybeSingle();
     if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
+
+    if (match.tenant_id !== req.tenantId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Match belongs to another organization' });
+    }
 
     const uid = req.user!.id;
     const isAdmin = req.user!.role === 'admin';

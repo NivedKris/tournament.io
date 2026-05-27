@@ -12,7 +12,7 @@ const router = Router();
  */
 router.post('/admin/remind-pending', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const tournament = await getActiveTournament();
+    const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) {
       return res.status(404).json({ success: false, error: 'No active tournament found' });
     }
@@ -207,7 +207,7 @@ router.post('/admin/broadcast', verifySession, requireRole('admin'), async (req:
       return res.status(400).json({ success: false, error: 'Subject and message are required.' });
     }
 
-    const tournament = await getActiveTournament();
+    const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) {
       return res.status(404).json({ success: false, error: 'No active tournament found' });
     }
@@ -310,6 +310,7 @@ router.post('/admin/notify-winner', verifySession, requireRole('admin'), async (
     const { data: tournament, error: tErr } = await supabaseAdmin
       .from('tournaments')
       .select('*')
+      .eq('tenant_id', req.tenantId || '00000000-0000-0000-0000-000000000000')
       .eq('status', 'completed')
       .order('created_at', { ascending: false })
       .limit(1)

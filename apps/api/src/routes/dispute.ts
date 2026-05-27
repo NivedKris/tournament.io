@@ -65,6 +65,10 @@ router.post('/:id/dispute', verifySession, requireActive, async (req: Request, r
       return res.status(404).json({ success: false, error: 'Match not found' });
     }
 
+    if (match.tenant_id !== req.tenantId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Match belongs to another organization' });
+    }
+
     if (match.status !== 'pending_verification') {
       return res.status(400).json({ success: false, error: 'Match cannot be disputed. Status must be pending_verification.' });
     }
@@ -118,6 +122,10 @@ router.post('/:id/withdraw-dispute', verifySession, requireActive, async (req: R
     const dispute = await getOpenDispute(matchId);
     if (!dispute) {
       return res.status(404).json({ success: false, error: 'No open dispute found for this match.' });
+    }
+
+    if (dispute.tenant_id !== req.tenantId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Dispute belongs to another organization' });
     }
 
     if (dispute.raised_by !== userId) {
@@ -198,6 +206,10 @@ router.post('/admin/:id/resolve-dispute', verifySession, requireRole('admin'), a
 
     if (!match) {
       return res.status(404).json({ success: false, error: 'Match not found.' });
+    }
+
+    if (match.tenant_id !== req.tenantId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Match belongs to another organization' });
     }
 
     if (action === 'confirm') {
