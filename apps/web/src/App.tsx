@@ -23,6 +23,7 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 1000 * 60,   // 1 minute
       retry: 1,
+      refetchOnWindowFocus: false,
     },
   },
 });
@@ -39,7 +40,7 @@ export default function App() {
       if (event === 'SIGNED_OUT') {
         useAuthStore.getState().setUser(null);
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        loadSession();
+        loadSession({ silent: true });
       }
     });
 

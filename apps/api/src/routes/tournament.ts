@@ -162,6 +162,53 @@ router.post('/claim', verifySession, requireActive, async (req: Request, res: Re
   return res.status(201).json({ success: true, data: newClaim });
 });
 
+router.delete('/claim/:claimId', verifySession, async (req: Request, res: Response) => {
+  const { claimId } = req.params;
+
+  try {
+    const { data: claim, error: fetchErr } = await supabaseAdmin
+      .from('nation_claims')
+      .select('id, user_id, tournament_id')
+      .eq('id', claimId)
+      .maybeSingle();
+
+    if (fetchErr || !claim) {
+      return res.status(404).json({ success: false, error: 'Claim not found' });
+    }
+
+    const isAdmin = req.user!.role === 'admin';
+    const isOwner = req.user!.id === claim.user_id;
+
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ success: false, error: 'Unauthorized to delete this registration claim' });
+    }
+
+    const { data: tournament } = await supabaseAdmin
+      .from('tournaments')
+      .select('status')
+      .eq('id', claim.tournament_id)
+      .maybeSingle();
+
+    if (!isAdmin && tournament?.status !== 'registration') {
+      return res.status(400).json({ success: false, error: 'Cannot remove registration after the tournament has started' });
+    }
+
+    const { error: delErr } = await supabaseAdmin
+      .from('nation_claims')
+      .delete()
+      .eq('id', claimId);
+
+    if (delErr) {
+      console.error('[tournament/delete-claim] Error:', delErr);
+      return res.status(500).json({ success: false, error: 'Failed to delete registration claim' });
+    }
+
+    return res.json({ success: true, message: 'Player removed successfully' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── Phase 3: Draw Pre-Quals ─────────────────────────────────────────────────
 
 router.post('/admin/draw-prequals', verifySession, requireRole('admin'), async (req: Request, res: Response) => {

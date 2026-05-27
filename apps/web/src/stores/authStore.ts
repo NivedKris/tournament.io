@@ -16,7 +16,7 @@ interface AuthState {
   signInWithGuest: (username: string, password: string) => Promise<void>;
   signUpWithGuest: (name: string, username: string, password: string) => Promise<{ sanitized_username: string }>;
   signOut: () => Promise<void>;
-  loadSession: () => Promise<any>;
+  loadSession: (options?: { silent?: boolean }) => Promise<any>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -106,8 +106,10 @@ export const useAuthStore = create<AuthState>()(
         window.location.href = '/login';
       },
 
-      loadSession: async () => {
-        set({ isLoading: true });
+      loadSession: async (options?: { silent?: boolean }) => {
+        if (!options?.silent) {
+          set({ isLoading: true });
+        }
         try {
           const { data: { session } } = await supabase.auth.getSession();
 

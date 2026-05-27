@@ -184,9 +184,32 @@ export default function PublicProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   // Bench side panel drawer state
   const [showSubsDrawer, setShowSubsDrawer] = useState(false);
+
+  const handleRemovePlayer = async () => {
+    if (!window.confirm("WARNING: This will permanently remove this player from the tournament, delete their squad, matches, and release their claimed nation.\n\nAre you sure you want to completely remove this player?")) {
+      return;
+    }
+
+    setIsRemoving(true);
+    try {
+      const response = await api.delete(`/tournament/claim/${claimId}`);
+      if (response.data.success) {
+        alert("Player successfully removed from the tournament.");
+        navigate('/');
+      } else {
+        alert(response.data.error || "Failed to remove player.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.error || "An error occurred while removing the player.");
+    } finally {
+      setIsRemoving(false);
+    }
+  };
 
   useEffect(() => {
     async function loadProfile() {
@@ -302,18 +325,31 @@ export default function PublicProfilePage() {
             <h2>{claim.display_name}</h2>
             <span className="profile-username">@{claim.username}</span>
             {isAdmin && (
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => navigate(`/squad-builder?claimId=${claimId}`)}
-                style={{
-                  marginTop: '12px',
-                  border: '1px solid var(--accent)',
-                  color: 'var(--accent)',
-                  background: 'transparent',
-                }}
-              >
-                Edit Squad (Admin)
-              </button>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => navigate(`/squad-builder?claimId=${claimId}`)}
+                  style={{
+                    border: '1px solid var(--accent)',
+                    color: 'var(--accent)',
+                    background: 'transparent',
+                  }}
+                >
+                  Edit Squad (Admin)
+                </button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={handleRemovePlayer}
+                  disabled={isRemoving}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--danger, #ef4444)',
+                    color: 'var(--danger, #ef4444)',
+                  }}
+                >
+                  {isRemoving ? 'Removing...' : 'Remove Player'}
+                </button>
+              </div>
             )}
           </div>
 
