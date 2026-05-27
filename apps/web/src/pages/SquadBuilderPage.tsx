@@ -413,7 +413,7 @@ export default function SquadBuilderPage() {
     // 2. Verify all 15 substitutes are fully populated
     const missingSubs = SUBS.filter(subKey => !positions[subKey]);
 
-    if (missingPositions.length > 0 || missingSubs.length > 0) {
+    if ((missingPositions.length > 0 || missingSubs.length > 0) && !screenshotUrl) {
       let errMsg = "Cannot lock squad: Your squad is incomplete. ";
       const parts = [];
       if (missingPositions.length > 0) {

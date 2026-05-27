@@ -195,8 +195,8 @@ router.post('/', verifySession, requireActive, async (req: Request, res: Respons
 
   // 2. Extract selected players and validate
   const squadPlayers = Object.values(positions).filter((p) => p && typeof p === 'object');
-  if (squadPlayers.length === 0) {
-    return res.status(400).json({ success: false, error: 'Squad must contain at least one player' });
+  if (squadPlayers.length === 0 && !screenshot_url) {
+    return res.status(400).json({ success: false, error: 'Squad must contain at least one player or a screenshot' });
   }
 
   // 3. Upsert players to local DB
@@ -210,13 +210,15 @@ router.post('/', verifySession, requireActive, async (req: Request, res: Respons
     image_url: p.image_url || (p.image ? `https://www.pesmaster.com${p.image}` : null),
   }));
 
-  const { error: upsertErr } = await supabaseAdmin
-    .from('players')
-    .upsert(playersToUpsert, { onConflict: 'id' });
+  if (playersToUpsert.length > 0) {
+    const { error: upsertErr } = await supabaseAdmin
+      .from('players')
+      .upsert(playersToUpsert, { onConflict: 'id' });
 
-  if (upsertErr) {
-    console.error('[squad/save] Error upserting players:', upsertErr);
-    return res.status(500).json({ success: false, error: 'Failed to sync squad players database' });
+    if (upsertErr) {
+      console.error('[squad/save] Error upserting players:', upsertErr);
+      return res.status(500).json({ success: false, error: 'Failed to sync squad players database' });
+    }
   }
 
   // 4. Map the positions JSON for saving (map label -> player ID bigint)
@@ -342,7 +344,7 @@ router.post('/lock', verifySession, requireActive, async (req: Request, res: Res
     }
 
     // 4. Validate starting 11 and 15 subs are filled when locking
-    if (shouldLock) {
+    if (shouldLock && !squad.screenshot_url) {
       const reqPositions = FORMATION_POSITIONS[squad.formation];
       if (!reqPositions) {
         return res.status(400).json({ success: false, error: `Invalid squad formation: ${squad.formation}` });
