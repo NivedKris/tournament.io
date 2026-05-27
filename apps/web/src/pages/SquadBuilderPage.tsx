@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 
@@ -164,6 +164,8 @@ const SUBS = Array.from({ length: 15 }, (_, i) => `SUB_${i + 1}`);
 export default function SquadBuilderPage() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const targetClaimId = searchParams.get('claimId');
 
   const [claimId, setClaimId] = useState<string | null>(null);
   const [formation, setFormation] = useState('4-3-3');
@@ -188,10 +190,21 @@ export default function SquadBuilderPage() {
 
   const [isLocked, setIsLocked] = useState(false);
   const [isLocking, setIsLocking] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
+
+  // Screenshot Upload State
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Admin Claim Info
+  const [adminClaimInfo, setAdminClaimInfo] = useState<any | null>(null);
 
   const pitchRef = useRef<HTMLDivElement>(null);
   const dragNodeRef = useRef<string | null>(null);
+
+  const isEditable = !isLocked || (user?.role === 'admin' && !!adminClaimInfo);
 
   // Load existing claim & squad
   useEffect(() => {
@@ -205,22 +218,37 @@ export default function SquadBuilderPage() {
 
         const nRes = await api.get('/tournament/nations');
         if (nRes.data.success) {
-          const userClaim = nRes.data.data
-            .flatMap((n: any) => n.claims || [])
-            .find((c: any) => c.user_id === user?.id);
+          const allClaims = nRes.data.data.flatMap((n: any) => 
+            (n.claims || []).map((c: any) => ({
+              ...c,
+              nation_name: n.name,
+              flag_url: n.flag_url,
+            }))
+          );
 
-          if (!userClaim) {
-            navigate('/');
-            return;
+          let resolvedClaimId = '';
+          const isAdmin = user?.role === 'admin';
+          if (isAdmin && targetClaimId) {
+            resolvedClaimId = targetClaimId;
+            const claimInfo = allClaims.find((c: any) => c.id === targetClaimId);
+            setAdminClaimInfo(claimInfo || { id: targetClaimId, display_name: 'Player', nation_name: 'Target Team' });
+          } else {
+            const userClaim = allClaims.find((c: any) => c.user_id === user?.id);
+            if (!userClaim) {
+              navigate('/');
+              return;
+            }
+            resolvedClaimId = userClaim.id;
           }
-          setClaimId(userClaim.id);
+          setClaimId(resolvedClaimId);
 
-          const sRes = await api.get(`/squad/${userClaim.id}`);
+          const sRes = await api.get(`/squad/${resolvedClaimId}`);
           if (sRes.data.success && sRes.data.data) {
             const squad = sRes.data.data;
             setFormation(squad.formation);
             setPositions(squad.positions || {});
             setIsLocked(!!squad.locked);
+            setScreenshotUrl(squad.screenshot_url || null);
 
             if (squad.coordinates) {
               setCoords(squad.coordinates);
@@ -235,8 +263,10 @@ export default function SquadBuilderPage() {
         console.error(err);
       }
     }
-    loadData();
-  }, [user, navigate]);
+    if (user) {
+      loadData();
+    }
+  }, [user, navigate, targetClaimId]);
 
   // Handle formation change
   const handleFormationChange = (newForm: string) => {
@@ -278,7 +308,7 @@ export default function SquadBuilderPage() {
 
   // Handle slot clicking (Starting XI or Sub)
   const handleSlotClick = (nodeKey: string) => {
-    if (isLocked) return;
+    if (!isEditable) return;
     if (swapSourceNode) {
       if (swapSourceNode === nodeKey) {
         setSwapSourceNode(null);
@@ -326,12 +356,12 @@ export default function SquadBuilderPage() {
 
   // Drag handlers for starting XI
   const handleTouchStart = (nodeKey: string) => {
-    if (isLocked) return;
+    if (!isEditable) return;
     dragNodeRef.current = nodeKey;
   };
 
   const handleMouseDown = (nodeKey: string) => {
-    if (isLocked) return;
+    if (!isEditable) return;
     dragNodeRef.current = nodeKey;
   };
 
@@ -398,7 +428,10 @@ export default function SquadBuilderPage() {
       return;
     }
 
-    if (!window.confirm("Are you sure you want to LOCK your squad? Once locked, you cannot modify, swap, or search for players, and your formation is final for this tournament.")) {
+    if (!window.confirm(adminClaimInfo
+      ? `Are you sure you want to LOCK this squad? The player will no longer be able to make changes.`
+      : "Are you sure you want to LOCK your squad? Once locked, you cannot modify, swap, or search for players, and your formation is final for this tournament."
+    )) {
       return;
     }
 
@@ -406,7 +439,10 @@ export default function SquadBuilderPage() {
     setLockError(null);
 
     try {
-      const response = await api.post('/squad/lock');
+      const response = await api.post('/squad/lock', {
+        claimId: adminClaimInfo ? claimId : undefined,
+        lock: true
+      });
       if (response.data.success) {
         setIsLocked(true);
       } else {
@@ -417,6 +453,32 @@ export default function SquadBuilderPage() {
       setLockError(err.response?.data?.error || 'Failed to lock squad');
     } finally {
       setIsLocking(false);
+    }
+  };
+
+  const handleUnlock = async () => {
+    if (!window.confirm("Are you sure you want to UNLOCK this squad? The player will be allowed to modify their squad again.")) {
+      return;
+    }
+
+    setIsUnlocking(true);
+    setLockError(null);
+
+    try {
+      const response = await api.post('/squad/lock', {
+        claimId: adminClaimInfo ? claimId : undefined,
+        lock: false
+      });
+      if (response.data.success) {
+        setIsLocked(false);
+      } else {
+        setLockError(response.data.error || 'Failed to unlock squad');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setLockError(err.response?.data?.error || 'Failed to unlock squad');
+    } finally {
+      setIsUnlocking(false);
     }
   };
 
@@ -438,6 +500,8 @@ export default function SquadBuilderPage() {
         formation,
         positions: savedPositions,
         coordinates: coords,
+        screenshot_url: screenshotUrl,
+        claimId: adminClaimInfo ? claimId : undefined,
       });
 
       if (response.data.success) {
@@ -454,6 +518,34 @@ export default function SquadBuilderPage() {
     }
   };
 
+  const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const response = await api.post('/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      if (response.data.success && response.data.data?.url) {
+        setScreenshotUrl(response.data.data.url);
+      } else {
+        alert(response.data.error || 'Upload failed');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.error || 'Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const startingCount = Object.keys(coords).filter((k) => positions[k]).length;
   const subCount = SUBS.filter((k) => positions[k]).length;
 
@@ -463,7 +555,7 @@ export default function SquadBuilderPage() {
       {isLocked && (
         <div className="swap-banner-container" style={{ background: 'rgba(16, 185, 129, 0.15)', borderColor: 'rgba(16, 185, 129, 0.3)' }}>
           <div className="swap-banner" style={{ color: '#10b981' }}>
-            <span>🔒 <strong>SQUAD LOCKED</strong> — Your squad is registered and locked for this tournament. No further edits can be made.</span>
+            <span><strong>SQUAD LOCKED</strong> — {adminClaimInfo ? "This user's squad is locked." : "Your squad is registered and locked for this tournament. No further edits can be made."}</span>
           </div>
         </div>
       )}
@@ -494,31 +586,74 @@ export default function SquadBuilderPage() {
           {saveStatus === 'error' && <span className="status-toast error">Save Failed</span>}
           {lockError && <span className="status-toast error">{lockError}</span>}
 
-          {!isLocked ? (
-            <>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={handleLock}
-                disabled={isSaving || isLocking}
-                style={{ marginRight: '8px' }}
-              >
-                {isLocking ? 'Locking...' : 'Lock Squad'}
-              </button>
+          {adminClaimInfo ? (
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 className="btn btn-primary btn-sm"
                 onClick={handleSave}
-                disabled={isSaving || isLocking}
+                disabled={isSaving}
               >
-                {isSaving ? 'Saving...' : 'Save Tactics'}
+                {isSaving ? 'Saving...' : 'Save Squad'}
               </button>
-            </>
+              {isLocked ? (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleUnlock}
+                  disabled={isUnlocking}
+                >
+                  {isUnlocking ? 'Unlocking...' : 'Unlock Squad'}
+                </button>
+              ) : (
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={handleLock}
+                  disabled={isLocking}
+                >
+                  {isLocking ? 'Locking...' : 'Lock Squad'}
+                </button>
+              )}
+            </div>
           ) : (
-            <button className="btn btn-success btn-sm" disabled style={{ background: '#10b981', color: '#fff', border: 'none', opacity: 0.8, cursor: 'not-allowed' }}>
-              Locked & Ready
-            </button>
+            !isLocked ? (
+              <>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleLock}
+                  disabled={isSaving || isLocking}
+                  style={{ marginRight: '8px' }}
+                >
+                  {isLocking ? 'Locking...' : 'Lock Squad'}
+                </button>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSave}
+                  disabled={isSaving || isLocking}
+                >
+                  {isSaving ? 'Saving...' : 'Save Tactics'}
+                </button>
+              </>
+            ) : (
+              <button className="btn btn-success btn-sm" disabled style={{ background: '#10b981', color: '#fff', border: 'none', opacity: 0.8, cursor: 'not-allowed' }}>
+                Locked & Ready
+              </button>
+            )
           )}
         </div>
       </nav>
+
+      {adminClaimInfo && (
+        <div className="admin-console-card" style={{ margin: '24px 24px 0 24px', borderLeft: '4px solid var(--accent)', padding: '16px 24px' }}>
+          <div className="console-header" style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <span className="badge badge-admin" style={{ marginRight: '8px', background: '#3b82f6', color: '#fff', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>ADMIN MODE</span>
+              <span style={{ color: 'var(--fg-muted)', fontSize: '0.9rem' }}>Editing squad for <strong>{adminClaimInfo.display_name}</strong> ({adminClaimInfo.nation_name})</span>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={() => navigate('/')}>
+              Exit Admin Mode
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="squad-builder-layout">
         {/* Sidebar Controls */}
@@ -533,7 +668,7 @@ export default function SquadBuilderPage() {
                 value={formation}
                 onChange={(e) => handleFormationChange(e.target.value)}
                 className="form-input"
-                disabled={isLocked}
+                disabled={!isEditable}
               >
                 <option value="4-3-3">4-3-3 (Standard)</option>
                 <option value="4-4-2">4-4-2 (Flat)</option>
@@ -583,6 +718,49 @@ export default function SquadBuilderPage() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Squad Screenshot Upload / View */}
+          <div className="squad-screenshot-section">
+            <h3>Squad Screenshot</h3>
+            {screenshotUrl ? (
+              <div className="screenshot-preview-container">
+                <img
+                  src={screenshotUrl}
+                  alt="Squad Screenshot"
+                  className="screenshot-preview"
+                  onClick={() => setIsFullscreen(true)}
+                />
+                {isEditable && (
+                  <button
+                    className="btn btn-danger btn-sm"
+                    onClick={() => setScreenshotUrl(null)}
+                    style={{ width: '100%' }}
+                  >
+                    Remove Screenshot
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="screenshot-upload-dropzone">
+                <p>Upload your squad screenshot</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleScreenshotUpload}
+                  disabled={isUploading || !isEditable}
+                  id="screenshot-upload-input"
+                  style={{ display: 'none' }}
+                />
+                <label
+                  htmlFor="screenshot-upload-input"
+                  className="btn btn-secondary btn-sm"
+                  style={{ cursor: isUploading || !isEditable ? 'not-allowed' : 'pointer' }}
+                >
+                  {isUploading ? 'Uploading...' : 'Upload'}
+                </label>
+              </div>
+            )}
           </div>
 
           <button
@@ -737,6 +915,13 @@ export default function SquadBuilderPage() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+        {/* Fullscreen Screenshot Overlay */}
+        {isFullscreen && screenshotUrl && (
+          <div className="fullscreen-overlay" onClick={() => setIsFullscreen(false)}>
+            <button className="close-fullscreen" onClick={() => setIsFullscreen(false)}>×</button>
+            <img src={screenshotUrl} alt="Squad Screenshot Fullscreen" className="fullscreen-image" onClick={(e) => e.stopPropagation()} />
           </div>
         )}
       </div>

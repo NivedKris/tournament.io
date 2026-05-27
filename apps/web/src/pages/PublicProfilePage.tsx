@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
+import { useAuthStore } from '../stores/authStore';
 
 interface Player {
   id: number;
@@ -175,11 +176,14 @@ const SUBS = Array.from({ length: 15 }, (_, i) => `SUB_${i + 1}`);
 export default function PublicProfilePage() {
   const { claimId } = useParams<{ claimId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
 
   const [claim, setClaim] = useState<ClaimInfo | null>(null);
   const [squad, setSquad] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Bench side panel drawer state
   const [showSubsDrawer, setShowSubsDrawer] = useState(false);
@@ -297,6 +301,20 @@ export default function PublicProfilePage() {
             <span className="badge badge-player">{claim.nation_name}</span>
             <h2>{claim.display_name}</h2>
             <span className="profile-username">@{claim.username}</span>
+            {isAdmin && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => navigate(`/squad-builder?claimId=${claimId}`)}
+                style={{
+                  marginTop: '12px',
+                  border: '1px solid var(--accent)',
+                  color: 'var(--accent)',
+                  background: 'transparent',
+                }}
+              >
+                Edit Squad (Admin)
+              </button>
+            )}
           </div>
 
           <div className="team-stats-grid">
@@ -316,7 +334,8 @@ export default function PublicProfilePage() {
         </div>
 
         {squad ? (
-          <div className="profile-tactics-layout">
+          <>
+            <div className="profile-tactics-layout">
             {/* Read-Only Pitch Display */}
             <div className="pitch-container read-only">
               <div className="pitch-canvas">
@@ -394,6 +413,21 @@ export default function PublicProfilePage() {
               </div>
             </div>
           </div>
+
+          {squad.screenshot_url && (
+            <div className="squad-screenshot-section" style={{ marginTop: '24px' }}>
+              <h3>Squad Screenshot</h3>
+              <div className="screenshot-preview-container">
+                <img
+                  src={squad.screenshot_url}
+                  alt="Squad Screenshot"
+                  className="screenshot-preview"
+                  onClick={() => setIsFullscreen(true)}
+                />
+              </div>
+            </div>
+          )}
+          </>
         ) : (
           <div className="no-squad-alert">
             <p>This player has not set up their squad tactics yet.</p>
@@ -441,6 +475,14 @@ export default function PublicProfilePage() {
                 })}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Fullscreen Screenshot Overlay */}
+        {isFullscreen && squad && squad.screenshot_url && (
+          <div className="fullscreen-overlay" onClick={() => setIsFullscreen(false)}>
+            <button className="close-fullscreen" onClick={() => setIsFullscreen(false)}>×</button>
+            <img src={squad.screenshot_url} alt="Squad Screenshot Fullscreen" className="fullscreen-image" onClick={(e) => e.stopPropagation()} />
           </div>
         )}
       </div>

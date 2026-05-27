@@ -128,17 +128,19 @@ router.get('/:claimId', async (req: Request, res: Response) => {
  * }
  */
 router.post('/', verifySession, requireActive, async (req: Request, res: Response) => {
-  const { formation, positions, coordinates } = req.body as {
+  const { formation, positions, coordinates, screenshot_url, claimId } = req.body as {
     formation?: string;
     positions?: Record<string, any>;
     coordinates?: Record<string, { x: number; y: number }>;
+    screenshot_url?: string | null;
+    claimId?: string;
   };
 
   if (!formation || !positions || typeof positions !== 'object') {
     return res.status(400).json({ success: false, error: 'Formation and positions mapping are required' });
   }
 
-  // 1. Fetch current active tournament & user's claim
+  // 1. Fetch current active tournament & claim
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from('tournaments')
     .select('id, status')
@@ -152,19 +154,32 @@ router.post('/', verifySession, requireActive, async (req: Request, res: Respons
     return res.status(404).json({ success: false, error: 'No active tournament found' });
   }
 
-  if (tournament.status !== 'registration') {
+  if (tournament.status !== 'registration' && req.user!.role !== 'admin') {
     return res.status(400).json({ success: false, error: 'Cannot modify squad after registration stage' });
   }
 
-  const { data: claim, error: cErr } = await supabaseAdmin
-    .from('nation_claims')
-    .select('id, status')
-    .eq('tournament_id', tournament.id)
-    .eq('user_id', req.user!.id)
-    .maybeSingle();
-
-  if (cErr || !claim) {
-    return res.status(403).json({ success: false, error: 'You do not have a registered nation claim in this tournament' });
+  let claim;
+  if (req.user!.role === 'admin' && claimId) {
+    const { data: targetClaim, error: cErr } = await supabaseAdmin
+      .from('nation_claims')
+      .select('id, status, user_id')
+      .eq('id', claimId)
+      .maybeSingle();
+    if (cErr || !targetClaim) {
+      return res.status(404).json({ success: false, error: 'Target claim not found' });
+    }
+    claim = targetClaim;
+  } else {
+    const { data: userClaim, error: cErr } = await supabaseAdmin
+      .from('nation_claims')
+      .select('id, status, user_id')
+      .eq('tournament_id', tournament.id)
+      .eq('user_id', req.user!.id)
+      .maybeSingle();
+    if (cErr || !userClaim) {
+      return res.status(403).json({ success: false, error: 'You do not have a registered nation claim in this tournament' });
+    }
+    claim = userClaim;
   }
 
   // Fetch existing squad to check if it's locked
@@ -174,7 +189,7 @@ router.post('/', verifySession, requireActive, async (req: Request, res: Respons
     .eq('claim_id', claim.id)
     .maybeSingle();
 
-  if (existingSquad?.locked) {
+  if (existingSquad?.locked && req.user!.role !== 'admin') {
     return res.status(400).json({ success: false, error: 'Squad is locked and cannot be modified' });
   }
 
@@ -215,12 +230,13 @@ router.post('/', verifySession, requireActive, async (req: Request, res: Respons
     .from('squads')
     .upsert(
       {
-        user_id: req.user!.id,
+        user_id: claim.user_id,
         tournament_id: tournament.id,
         claim_id: claim.id,
         formation,
         positions: squadPositionsMapping,
         coordinates: coordinates || null,
+        screenshot_url: screenshot_url || null,
         updated_at: new Date().toISOString(),
         tenant_id: req.tenantId || '00000000-0000-0000-0000-000000000000',
       },
@@ -253,6 +269,17 @@ const FORMATION_POSITIONS: Record<string, string[]> = {
 
 router.post('/lock', verifySession, requireActive, async (req: Request, res: Response) => {
   try {
+    const { claimId, lock } = req.body as {
+      claimId?: string;
+      lock?: boolean;
+    };
+
+    const shouldLock = lock !== false;
+
+    if (!shouldLock && req.user!.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Only administrators can unlock squads' });
+    }
+
     // 1. Fetch current active tournament
     const { data: tournament, error: tErr } = await supabaseAdmin
       .from('tournaments')
@@ -267,23 +294,36 @@ router.post('/lock', verifySession, requireActive, async (req: Request, res: Res
       return res.status(404).json({ success: false, error: 'No active tournament found' });
     }
 
-    if (tournament.status !== 'registration') {
-      return res.status(400).json({ success: false, error: 'Cannot lock squad outside registration stage' });
+    if (tournament.status !== 'registration' && req.user!.role !== 'admin') {
+      return res.status(400).json({ success: false, error: 'Cannot lock/unlock squad outside registration stage' });
     }
 
-    // 2. Fetch user's claim
-    const { data: claim, error: cErr } = await supabaseAdmin
-      .from('nation_claims')
-      .select('id')
-      .eq('tournament_id', tournament.id)
-      .eq('user_id', req.user!.id)
-      .maybeSingle();
-
-    if (cErr || !claim) {
-      return res.status(403).json({ success: false, error: 'You do not have a registered claim in this tournament' });
+    // 2. Fetch claim
+    let claim;
+    if (req.user!.role === 'admin' && claimId) {
+      const { data: targetClaim, error: cErr } = await supabaseAdmin
+        .from('nation_claims')
+        .select('id')
+        .eq('id', claimId)
+        .maybeSingle();
+      if (cErr || !targetClaim) {
+        return res.status(404).json({ success: false, error: 'Target claim not found' });
+      }
+      claim = targetClaim;
+    } else {
+      const { data: userClaim, error: cErr } = await supabaseAdmin
+        .from('nation_claims')
+        .select('id')
+        .eq('tournament_id', tournament.id)
+        .eq('user_id', req.user!.id)
+        .maybeSingle();
+      if (cErr || !userClaim) {
+        return res.status(403).json({ success: false, error: 'You do not have a registered claim in this tournament' });
+      }
+      claim = userClaim;
     }
 
-    // 3. Fetch user's squad
+    // 3. Fetch squad
     const { data: squad, error: sErr } = await supabaseAdmin
       .from('squads')
       .select('*')
@@ -294,50 +334,54 @@ router.post('/lock', verifySession, requireActive, async (req: Request, res: Res
       return res.status(404).json({ success: false, error: 'Squad not built yet. Save your squad first.' });
     }
 
-    if (squad.locked) {
+    if (shouldLock && squad.locked) {
       return res.status(400).json({ success: false, error: 'Squad is already locked' });
     }
-
-    // 4. Validate that all 11 starting positions are filled
-    const reqPositions = FORMATION_POSITIONS[squad.formation];
-    if (!reqPositions) {
-      return res.status(400).json({ success: false, error: `Invalid squad formation: ${squad.formation}` });
+    if (!shouldLock && !squad.locked) {
+      return res.status(400).json({ success: false, error: 'Squad is already unlocked' });
     }
 
-    const missingPositions = reqPositions.filter(pos => !squad.positions[pos]);
-    if (missingPositions.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: `Cannot lock squad: missing starting players for position(s): ${missingPositions.join(', ')}`,
-      });
-    }
+    // 4. Validate starting 11 and 15 subs are filled when locking
+    if (shouldLock) {
+      const reqPositions = FORMATION_POSITIONS[squad.formation];
+      if (!reqPositions) {
+        return res.status(400).json({ success: false, error: `Invalid squad formation: ${squad.formation}` });
+      }
 
-    // Validate that all 15 substitute slots (SUB_1 through SUB_15) are filled
-    const missingSubs: string[] = [];
-    for (let i = 1; i <= 15; i++) {
-      const subKey = `SUB_${i}`;
-      if (!squad.positions[subKey]) {
-        missingSubs.push(`SUB ${i}`);
+      const missingPositions = reqPositions.filter(pos => !squad.positions[pos]);
+      if (missingPositions.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot lock squad: missing starting players for position(s): ${missingPositions.join(', ')}`,
+        });
+      }
+
+      const missingSubs: string[] = [];
+      for (let i = 1; i <= 15; i++) {
+        const subKey = `SUB_${i}`;
+        if (!squad.positions[subKey]) {
+          missingSubs.push(`SUB ${i}`);
+        }
+      }
+      if (missingSubs.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot lock squad: missing substitute players for: ${missingSubs.join(', ')}`,
+        });
       }
     }
-    if (missingSubs.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: `Cannot lock squad: missing substitute players for: ${missingSubs.join(', ')}`,
-      });
-    }
 
-    // 5. Perform the lock
+    // 5. Update lock status
     const { data: lockedSquad, error: lockErr } = await supabaseAdmin
       .from('squads')
-      .update({ locked: true })
+      .update({ locked: shouldLock })
       .eq('id', squad.id)
       .select()
       .single();
 
     if (lockErr) {
-      console.error('[squad/lock] Error locking squad:', lockErr);
-      return res.status(500).json({ success: false, error: 'Failed to lock squad' });
+      console.error('[squad/lock] Error changing lock status:', lockErr);
+      return res.status(500).json({ success: false, error: 'Failed to update squad lock status' });
     }
 
     return res.json({ success: true, data: lockedSquad });
