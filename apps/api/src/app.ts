@@ -16,6 +16,7 @@ import notificationRouter from './routes/notification';
 import tenantRouter from './routes/tenant';
 import superadminRouter from './routes/superadmin';
 import invitationRouter from './routes/invitation';
+import pushRouter from './routes/push';
 import { resolveTenant } from './middleware/tenant';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
@@ -69,6 +70,7 @@ app.use('/matches', disputeRouter);
 app.use('/upload', uploadRouter);
 app.use('/reward', rewardRouter);
 app.use('/notification', notificationRouter);
+app.use('/push', pushRouter);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Health check

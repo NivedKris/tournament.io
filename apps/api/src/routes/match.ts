@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { supabaseAdmin } from '../lib/supabase';
 import { verifySession, requireActive, requireRole } from '../middleware/auth';
 import { notifyTournamentWinner } from '../services/email';
+import { sendUserPushNotification } from '../services/push';
 
 const router = Router();
 
@@ -539,6 +540,40 @@ router.post('/:id/messages', verifySession, requireActive, async (req: Request, 
       ...(attachment_url ? { attachment_url } : {}),
     }).select('*, users(id, username, display_name)').single();
     if (error) return res.status(500).json({ success: false, error: 'Failed to send message' });
+
+    // Send push notification to target user(s) in background
+    (async () => {
+      try {
+        const recipientIds: string[] = [];
+        if (uid === match.home_claim?.user_id) {
+          if (match.away_claim?.user_id) recipientIds.push(match.away_claim.user_id);
+        } else if (uid === match.away_claim?.user_id) {
+          if (match.home_claim?.user_id) recipientIds.push(match.home_claim.user_id);
+        } else if (isAdmin) {
+          if (match.home_claim?.user_id) recipientIds.push(match.home_claim.user_id);
+          if (match.away_claim?.user_id) recipientIds.push(match.away_claim.user_id);
+        }
+
+        let senderName = msg.users?.display_name || `@${msg.users?.username}` || 'Admin';
+        if (uid === match.home_claim?.user_id && match.home_claim?.nations?.name) {
+          senderName = `${senderName} (${match.home_claim.nations.name})`;
+        } else if (uid === match.away_claim?.user_id && match.away_claim?.nations?.name) {
+          senderName = `${senderName} (${match.away_claim.nations.name})`;
+        }
+
+        for (const recipientId of recipientIds) {
+          await sendUserPushNotification(recipientId, {
+            title: `New Message from ${senderName}`,
+            body: msg.body,
+            url: `/?matchId=${match.id}`,
+            icon: '/logo.png',
+            badge: '/logo.png'
+          });
+        }
+      } catch (pushErr) {
+        console.error('[PushDispatch] Failed to send chat push notification:', pushErr);
+      }
+    })();
 
     return res.status(201).json({ success: true, data: msg });
   } catch (err: any) {

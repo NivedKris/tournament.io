@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import api from '../lib/api';
+import { autoRegisterPushIfPermissionGranted, isPushSupported, getNotificationPermission, subscribeUserToPush } from '../lib/pushNotification';
 import { useTenant } from '../components/TenantProvider';
 import NationPicker from '../components/NationPicker';
 import GroupStandingsTable from '../components/GroupStandingsTable';
@@ -85,6 +86,7 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabType>('fixtures');
   const [fixtureFilter, setFixtureFilter] = useState<'all' | 'my'>('all');
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [showPushBannerGlobal, setShowPushBannerGlobal] = useState(false);
 
   // Admin states
   const [newName, setNewName] = useState('');
@@ -202,6 +204,52 @@ export default function HomePage() {
     loadData().finally(() => {
       setIsLoading(false);
     });
+  }, []);
+
+  // Auto-subscribe to push notifications or prompt if not configured
+  useEffect(() => {
+    if (user) {
+      if (isPushSupported()) {
+        const permission = getNotificationPermission();
+        if (permission === 'granted') {
+          autoRegisterPushIfPermissionGranted();
+        } else if (permission === 'default') {
+          const dismissed = localStorage.getItem('push_prompt_dismissed');
+          if (!dismissed) {
+            // Show prompt after a short delay (e.g. 2.5 seconds) so it's not jarring on load
+            const timer = setTimeout(() => {
+              setShowPushBannerGlobal(true);
+            }, 2500);
+            return () => clearTimeout(timer);
+          }
+        }
+      }
+    }
+  }, [user]);
+
+  const handleDismissGlobalPush = () => {
+    localStorage.setItem('push_prompt_dismissed', 'true');
+    setShowPushBannerGlobal(false);
+  };
+
+  const handleEnableGlobalPush = async () => {
+    const success = await subscribeUserToPush();
+    if (success) {
+      setShowPushBannerGlobal(false);
+    }
+  };
+
+  // Open match detail modal if matchId is in URL query parameters (e.g. from notification click)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mId = params.get('matchId');
+    if (mId) {
+      setSelectedMatchId(mId);
+      // Clean query params so it doesn't reopen next time
+      const url = new URL(window.location.href);
+      url.searchParams.delete('matchId');
+      window.history.replaceState({}, '', url.toString());
+    }
   }, []);
 
   // Update claim picker when user role loads
@@ -1843,6 +1891,91 @@ export default function HomePage() {
         onClose={() => setShowNotificationDrawer(false)}
         tournamentStatus={tournament?.status}
       />
+
+      {showPushBannerGlobal && (
+        <>
+          <style>{`
+            @keyframes slideUp {
+              from { transform: translateY(100px); opacity: 0; }
+              to { transform: translateY(0); opacity: 1; }
+            }
+          `}</style>
+          <div style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            maxWidth: '380px',
+            background: 'rgba(15, 23, 42, 0.9)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '16px',
+            padding: '20px',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(16px)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.15)',
+                borderRadius: '12px',
+                padding: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <span style={{ fontSize: '1.5rem' }}>🔔</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#fff' }}>Enable Push Notifications</span>
+                <span style={{ fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.7)', lineHeight: '1.4' }}>
+                  Never miss a chat message from your opponent! Get real-time alerts even when the app is closed.
+                </span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={handleDismissGlobalPush}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s',
+                }}
+              >
+                Maybe Later
+              </button>
+              <button
+                type="button"
+                onClick={handleEnableGlobalPush}
+                style={{
+                  background: '#3b82f6',
+                  border: 'none',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  padding: '8px 20px',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                }}
+              >
+                Enable
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
     </div>
   );
