@@ -274,7 +274,7 @@ router.post('/admin/draw-prequals', verifySession, requireRole('admin'), async (
     if (err4) throw err4;
 
     // Trigger Pre-Qual notification emails in background
-    notifyPreQualsStarted(tournament.id, tournament.name);
+    notifyPreQualsStarted(tournament.id, tournament.name, req);
 
     return res.json({
       success: true,
@@ -362,7 +362,7 @@ router.post('/admin/draw-groups', verifySession, requireRole('admin'), async (re
     if (updateErr) throw updateErr;
 
     // Trigger Group Stage notification emails in background
-    notifyGroupsStarted(tournament.id, tournament.name);
+    notifyGroupsStarted(tournament.id, tournament.name, req);
 
     return res.json({ success: true, data: { groups: sizes.length, matches: matchesToInsert.length, group_sizes: sizes } });
   } catch (err: any) {
@@ -577,7 +577,7 @@ router.post('/admin/start-knockouts', verifySession, requireRole('admin'), async
     if (updateErr) throw updateErr;
 
     // Trigger Knockout Stage notification emails in background
-    notifyKnockoutsStarted(tournament.id, tournament.name);
+    notifyKnockoutsStarted(tournament.id, tournament.name, req);
 
     return res.json({ success: true, data: { bracket_size: bracketSize, byes: numByes, matches: matchesToInsert.length } });
   } catch (err: any) {

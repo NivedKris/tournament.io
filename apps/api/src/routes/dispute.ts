@@ -159,7 +159,7 @@ router.post('/:id/withdraw-dispute', verifySession, requireActive, async (req: R
     if (disputeUpdateErr) throw disputeUpdateErr;
 
     // Trigger tournament stats and progression
-    await resolveAfterVerified(matchId);
+    await resolveAfterVerified(matchId, req);
 
     return res.json({ success: true, data: match });
   } catch (err: any) {
@@ -240,7 +240,7 @@ router.post('/admin/:id/resolve-dispute', verifySession, requireRole('admin'), a
       if (disputeUpdateErr) throw disputeUpdateErr;
 
       // Trigger consequences (advance bracket, qualify etc.)
-      await resolveAfterVerified(matchId);
+      await resolveAfterVerified(matchId, req);
 
       return res.json({ success: true, data: updatedMatch });
 
@@ -368,7 +368,7 @@ router.post('/admin/:id/resolve-dispute', verifySession, requireRole('admin'), a
       if (disputeUpdateErr) throw disputeUpdateErr;
 
       // Trigger standings & tournament progression
-      await resolveAfterVerified(matchId);
+      await resolveAfterVerified(matchId, req);
 
       return res.json({ success: true, data: updatedMatch });
     }

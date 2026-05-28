@@ -427,7 +427,7 @@ router.post('/admin/notify-prequal', verifySession, requireRole('admin'), async 
       return res.status(404).json({ success: false, error: 'No active tournament found' });
     }
     // Call background service
-    notifyPreQualsStarted(tournament.id, tournament.name);
+    notifyPreQualsStarted(tournament.id, tournament.name, req);
     return res.json({ success: true, message: 'Dispatched pre-qualifier emails in background.' });
   } catch (err: any) {
     console.error(err);
@@ -446,7 +446,7 @@ router.post('/admin/notify-groups', verifySession, requireRole('admin'), async (
       return res.status(404).json({ success: false, error: 'No active tournament found' });
     }
     // Call background service
-    notifyGroupsStarted(tournament.id, tournament.name);
+    notifyGroupsStarted(tournament.id, tournament.name, req);
     return res.json({ success: true, message: 'Dispatched group stage emails in background.' });
   } catch (err: any) {
     console.error(err);
@@ -465,7 +465,7 @@ router.post('/admin/notify-knockouts', verifySession, requireRole('admin'), asyn
       return res.status(404).json({ success: false, error: 'No active tournament found' });
     }
     // Call background service
-    notifyKnockoutsStarted(tournament.id, tournament.name);
+    notifyKnockoutsStarted(tournament.id, tournament.name, req);
     return res.json({ success: true, message: 'Dispatched knockout stage emails in background.' });
   } catch (err: any) {
     console.error(err);

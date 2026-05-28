@@ -52,7 +52,7 @@ function isParticipant(match: any, userId: string): boolean {
 }
 
 /** After verifying a match, apply all post-match consequences */
-export async function resolveAfterVerified(matchId: string) {
+export async function resolveAfterVerified(matchId: string, req?: any) {
   const { data: match } = await supabaseAdmin
     .from('matches').select(MATCH_SELECT).eq('id', matchId).single();
   if (!match) return;
@@ -116,7 +116,7 @@ export async function resolveAfterVerified(matchId: string) {
       await supabaseAdmin.from('tournaments').update({ status: 'completed' }).eq('id', match.tournament_id);
       const { data: tData } = await supabaseAdmin.from('tournaments').select('name').eq('id', match.tournament_id).maybeSingle();
       const tName = tData ? tData.name : 'Tournament';
-      notifyTournamentWinner(match.tournament_id, tName);
+      notifyTournamentWinner(match.tournament_id, tName, req);
     } else {
       // Auto-generate next round match if both sibling matches are verified
       await tryAutoAdvanceKnockout(match, winner_claim_id);
@@ -360,7 +360,7 @@ router.post('/:id/confirm-score', verifySession, requireActive, async (req: Requ
       .eq('id', match.id).select().single();
 
     // Fire post-match logic asynchronously
-    resolveAfterVerified(match.id).catch(err => console.error('[resolveAfterVerified]', err));
+    resolveAfterVerified(match.id, req).catch(err => console.error('[resolveAfterVerified]', err));
 
     return res.json({ success: true, data: updated });
   } catch (err: any) {
@@ -453,7 +453,7 @@ router.post('/admin/:id/verify', verifySession, requireRole('admin'), async (req
       }
     }
 
-    resolveAfterVerified(match.id).catch(err => console.error('[resolveAfterVerified]', err));
+    resolveAfterVerified(match.id, req).catch(err => console.error('[resolveAfterVerified]', err));
 
     return res.json({ success: true, data: updated });
   } catch (err: any) {

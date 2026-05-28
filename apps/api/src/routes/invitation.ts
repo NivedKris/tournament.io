@@ -145,7 +145,7 @@ router.post('/', verifySession, async (req: Request, res: Response) => {
 
     if (tenant) {
       // Send the beautifully formatted, brand-styled email via Brevo
-      await sendTenantInvitationEmail(normalizedEmail, invite.id, tenant, role);
+      await sendTenantInvitationEmail(normalizedEmail, invite.id, tenant, role, req);
     } else {
       // Fallback log
       const frontendUrl = getFrontendUrl(req);
@@ -215,7 +215,7 @@ router.post('/bulk', verifySession, async (req: Request, res: Response) => {
       (async () => {
         for (const inv of inserted) {
           try {
-            await sendTenantInvitationEmail(inv.email, inv.id, tenant, role);
+            await sendTenantInvitationEmail(inv.email, inv.id, tenant, role, req);
             // Throttle slightly to respect Brevo connection limit
             await new Promise((resolve) => setTimeout(resolve, 200));
           } catch (mailErr) {

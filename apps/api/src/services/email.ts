@@ -98,7 +98,7 @@ export function queueEmails(
 /**
  * Notify all pre-qual players that the Pre-Qualifiers phase has commenced.
  */
-export async function notifyPreQualsStarted(tournamentId: string, tournamentName: string) {
+export async function notifyPreQualsStarted(tournamentId: string, tournamentName: string, req?: any) {
   try {
     const { data: matches } = await supabaseAdmin.from('matches').select('*').eq('tournament_id', tournamentId).eq('stage', 'pre_qual');
     const { data: rawClaims } = await supabaseAdmin.from('nation_claims').select(`
@@ -151,7 +151,7 @@ export async function notifyPreQualsStarted(tournamentId: string, tournamentName
     const recipients = Array.from(userFixtures.values());
     if (recipients.length === 0) return;
 
-    const frontendUrl = getFrontendUrl();
+    const frontendUrl = getFrontendUrl(req);
 
     queueEmails(
       recipients.map(r => r.recipient),
@@ -228,7 +228,7 @@ export async function notifyPreQualsStarted(tournamentId: string, tournamentName
 /**
  * Notify all group stage players of their group placement and group fixtures.
  */
-export async function notifyGroupsStarted(tournamentId: string, tournamentName: string) {
+export async function notifyGroupsStarted(tournamentId: string, tournamentName: string, req?: any) {
   try {
     const { data: matches } = await supabaseAdmin.from('matches').select('*').eq('tournament_id', tournamentId).eq('stage', 'group');
     const { data: rawClaims } = await supabaseAdmin.from('nation_claims').select(`
@@ -288,7 +288,7 @@ export async function notifyGroupsStarted(tournamentId: string, tournamentName: 
     const recipients = Array.from(userFixtures.values());
     if (recipients.length === 0) return;
 
-    const frontendUrl = getFrontendUrl();
+    const frontendUrl = getFrontendUrl(req);
 
     queueEmails(
       recipients.map(r => r.recipient),
@@ -362,7 +362,7 @@ export async function notifyGroupsStarted(tournamentId: string, tournamentName: 
  * Notify all players qualified for knockouts about their next knockout fixtures.
  * Do not email users who did not qualify for knockouts.
  */
-export async function notifyKnockoutsStarted(tournamentId: string, tournamentName: string) {
+export async function notifyKnockoutsStarted(tournamentId: string, tournamentName: string, req?: any) {
   try {
     const { data: matches } = await supabaseAdmin.from('matches').select('*').eq('tournament_id', tournamentId).eq('stage', 'knockout');
     const { data: rawClaims } = await supabaseAdmin.from('nation_claims').select(`
@@ -419,7 +419,7 @@ export async function notifyKnockoutsStarted(tournamentId: string, tournamentNam
     const recipients = Array.from(userFixtures.values());
     if (recipients.length === 0) return;
 
-    const frontendUrl = getFrontendUrl();
+    const frontendUrl = getFrontendUrl(req);
 
     queueEmails(
       recipients.map(r => r.recipient),
@@ -490,7 +490,7 @@ export async function notifyKnockoutsStarted(tournamentId: string, tournamentNam
 /**
  * Broadcast tournament winner and final statistics to all users.
  */
-export async function notifyTournamentWinner(tournamentId: string, tournamentName: string) {
+export async function notifyTournamentWinner(tournamentId: string, tournamentName: string, req?: any) {
   try {
     const { data: claims } = await supabaseAdmin.from('nation_claims').select(`
       id,
@@ -531,7 +531,7 @@ export async function notifyTournamentWinner(tournamentId: string, tournamentNam
       ? `${winnerUser?.display_name || `@${winnerUser?.username}`} playing as ${winnerNation?.name}`
       : 'TBD';
 
-    const frontendUrl = getFrontendUrl();
+    const frontendUrl = getFrontendUrl(req);
 
     queueEmails(
       users.map(u => ({ email: u.email!, name: u.display_name, username: u.username })),
@@ -625,9 +625,10 @@ export async function sendTenantInvitationEmail(
   email: string,
   inviteId: string,
   tenant: { name: string; slug: string; logo_url: string | null; primary_color: string },
-  role: 'player' | 'admin'
+  role: 'player' | 'admin',
+  req?: any
 ): Promise<boolean> {
-  const frontendUrl = getFrontendUrl();
+  const frontendUrl = getFrontendUrl(req);
   const inviteLink = `${frontendUrl}/invite/${inviteId}`;
   
   const brandColor = tenant.primary_color || '#007aff'; // Default Apple blue
