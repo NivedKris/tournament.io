@@ -157,6 +157,175 @@ const PRESETS: Record<string, Record<string, { x: number; y: number }>> = {
     CF_R: { x: 62, y: 14 },
     RW: { x: 85, y: 18 },
   },
+  '4-2-2-2': {
+    GK: { x: 50, y: 88 },
+    LB: { x: 15, y: 70 },
+    CB_L: { x: 35, y: 73 },
+    CB_R: { x: 65, y: 73 },
+    RB: { x: 85, y: 70 },
+    DM_L: { x: 35, y: 55 },
+    DM_R: { x: 65, y: 55 },
+    AM_L: { x: 33, y: 32 },
+    AM_R: { x: 67, y: 32 },
+    CF_L: { x: 35, y: 14 },
+    CF_R: { x: 65, y: 14 },
+  },
+  '4-1-2-3': {
+    GK: { x: 50, y: 88 },
+    LB: { x: 15, y: 70 },
+    CB_L: { x: 35, y: 73 },
+    CB_R: { x: 65, y: 73 },
+    RB: { x: 85, y: 70 },
+    DM: { x: 50, y: 55 },
+    AM_L: { x: 30, y: 36 },
+    AM_R: { x: 70, y: 36 },
+    LW: { x: 18, y: 18 },
+    RW: { x: 82, y: 18 },
+    CF: { x: 50, y: 12 },
+  },
+  '4-1-4-1': {
+    GK: { x: 50, y: 88 },
+    LB: { x: 15, y: 70 },
+    CB_L: { x: 35, y: 73 },
+    CB_R: { x: 65, y: 73 },
+    RB: { x: 85, y: 70 },
+    DM: { x: 50, y: 56 },
+    LM: { x: 15, y: 38 },
+    CM_L: { x: 35, y: 38 },
+    CM_R: { x: 65, y: 38 },
+    RM: { x: 85, y: 38 },
+    CF: { x: 50, y: 14 },
+  },
+  '3-1-4-2': {
+    GK: { x: 50, y: 88 },
+    CB_L: { x: 28, y: 73 },
+    CB_C: { x: 50, y: 76 },
+    CB_R: { x: 72, y: 73 },
+    DM: { x: 50, y: 56 },
+    LM: { x: 15, y: 38 },
+    CM_L: { x: 35, y: 38 },
+    CM_R: { x: 65, y: 38 },
+    RM: { x: 85, y: 38 },
+    CF_L: { x: 35, y: 14 },
+    CF_R: { x: 65, y: 14 },
+  },
+  '3-2-3-2': {
+    GK: { x: 50, y: 88 },
+    CB_L: { x: 28, y: 73 },
+    CB_C: { x: 50, y: 76 },
+    CB_R: { x: 72, y: 73 },
+    DM_L: { x: 35, y: 55 },
+    DM_R: { x: 65, y: 55 },
+    LM: { x: 15, y: 35 },
+    AM: { x: 50, y: 32 },
+    RM: { x: 85, y: 35 },
+    CF_L: { x: 35, y: 14 },
+    CF_R: { x: 65, y: 14 },
+  },
+  '3-2-4-1': {
+    GK: { x: 50, y: 88 },
+    CB_L: { x: 28, y: 73 },
+    CB_C: { x: 50, y: 76 },
+    CB_R: { x: 72, y: 73 },
+    DM_L: { x: 35, y: 55 },
+    DM_R: { x: 65, y: 55 },
+    LM: { x: 15, y: 35 },
+    AM_L: { x: 35, y: 32 },
+    AM_R: { x: 65, y: 32 },
+    RM: { x: 85, y: 35 },
+    CF: { x: 50, y: 12 },
+  },
+  '3-3-2-2': {
+    GK: { x: 50, y: 88 },
+    CB_L: { x: 28, y: 73 },
+    CB_C: { x: 50, y: 76 },
+    CB_R: { x: 72, y: 73 },
+    LM: { x: 15, y: 50 },
+    DM: { x: 50, y: 54 },
+    RM: { x: 85, y: 50 },
+    AM_L: { x: 33, y: 34 },
+    AM_R: { x: 67, y: 34 },
+    CF_L: { x: 35, y: 14 },
+    CF_R: { x: 65, y: 14 },
+  },
+  '3-4-1-2': {
+    GK: { x: 50, y: 88 },
+    CB_L: { x: 28, y: 73 },
+    CB_C: { x: 50, y: 76 },
+    CB_R: { x: 72, y: 73 },
+    LM: { x: 15, y: 46 },
+    CM_L: { x: 38, y: 48 },
+    CM_R: { x: 62, y: 48 },
+    RM: { x: 85, y: 46 },
+    AM: { x: 50, y: 32 },
+    CF_L: { x: 35, y: 14 },
+    CF_R: { x: 65, y: 14 },
+  },
+  '3-4-2-1': {
+    GK: { x: 50, y: 88 },
+    CB_L: { x: 28, y: 73 },
+    CB_C: { x: 50, y: 76 },
+    CB_R: { x: 72, y: 73 },
+    LM: { x: 15, y: 46 },
+    CM_L: { x: 38, y: 48 },
+    CM_R: { x: 62, y: 48 },
+    RM: { x: 85, y: 46 },
+    AM_L: { x: 33, y: 28 },
+    AM_R: { x: 67, y: 28 },
+    CF: { x: 50, y: 12 },
+  },
+  '4-3-1-2': {
+    GK: { x: 50, y: 88 },
+    LB: { x: 15, y: 70 },
+    CB_L: { x: 35, y: 73 },
+    CB_R: { x: 65, y: 73 },
+    RB: { x: 85, y: 70 },
+    CM_L: { x: 28, y: 50 },
+    CM_C: { x: 50, y: 53 },
+    CM_R: { x: 72, y: 50 },
+    AM: { x: 50, y: 32 },
+    CF_L: { x: 35, y: 14 },
+    CF_R: { x: 65, y: 14 },
+  },
+  '5-2-1-2': {
+    GK: { x: 50, y: 88 },
+    LWB: { x: 12, y: 60 },
+    CB_L: { x: 30, y: 74 },
+    CB_C: { x: 50, y: 76 },
+    CB_R: { x: 70, y: 74 },
+    RWB: { x: 88, y: 60 },
+    CM_L: { x: 35, y: 48 },
+    CM_R: { x: 65, y: 48 },
+    AM: { x: 50, y: 32 },
+    CF_L: { x: 35, y: 14 },
+    CF_R: { x: 65, y: 14 },
+  },
+  '5-2-2-1': {
+    GK: { x: 50, y: 88 },
+    LWB: { x: 12, y: 60 },
+    CB_L: { x: 30, y: 74 },
+    CB_C: { x: 50, y: 76 },
+    CB_R: { x: 70, y: 74 },
+    RWB: { x: 88, y: 60 },
+    CM_L: { x: 35, y: 48 },
+    CM_R: { x: 65, y: 48 },
+    AM_L: { x: 33, y: 28 },
+    AM_R: { x: 67, y: 28 },
+    CF: { x: 50, y: 12 },
+  },
+  '5-2-3': {
+    GK: { x: 50, y: 88 },
+    LWB: { x: 12, y: 60 },
+    CB_L: { x: 30, y: 74 },
+    CB_C: { x: 50, y: 76 },
+    CB_R: { x: 70, y: 74 },
+    RWB: { x: 88, y: 60 },
+    CM_L: { x: 35, y: 48 },
+    CM_R: { x: 65, y: 48 },
+    LW: { x: 18, y: 18 },
+    RW: { x: 82, y: 18 },
+    CF: { x: 50, y: 12 },
+  },
 };
 
 const SUBS = Array.from({ length: 15 }, (_, i) => `SUB_${i + 1}`);
@@ -670,17 +839,11 @@ export default function SquadBuilderPage() {
                 className="form-input"
                 disabled={!isEditable}
               >
-                <option value="4-3-3">4-3-3 (Standard)</option>
-                <option value="4-4-2">4-4-2 (Flat)</option>
-                <option value="3-5-2">3-5-2 (Wingback)</option>
-                <option value="4-2-3-1">4-2-3-1 (Balanced)</option>
-                <option value="4-1-2-1-2">4-1-2-1-2 (Diamond)</option>
-                <option value="4-5-1">4-5-1 (Flat Midfield)</option>
-                <option value="4-3-2-1">4-3-2-1 (Christmas Tree)</option>
-                <option value="5-3-2">5-3-2 (Defensive)</option>
-                <option value="3-4-3">3-4-3 (Attacking)</option>
-                <option value="5-4-1">5-4-1 (Park the Bus)</option>
-                <option value="4-2-4">4-2-4 (Hyper Attacking)</option>
+                {Object.keys(PRESETS).map((key) => (
+                  <option key={key} value={key}>
+                    {key}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
