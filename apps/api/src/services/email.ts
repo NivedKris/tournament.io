@@ -234,7 +234,6 @@ export async function notifyGroupsStarted(tournamentId: string, tournamentName: 
     const { data: rawClaims } = await supabaseAdmin.from('nation_claims').select(`
       id,
       user_id,
-      group_name,
       users!inner (email, display_name, username),
       nations!inner (name)
     `).eq('tournament_id', tournamentId);
@@ -244,10 +243,14 @@ export async function notifyGroupsStarted(tournamentId: string, tournamentName: 
     const claims = rawClaims.map((c: any) => {
       const userObj = Array.isArray(c.users) ? c.users[0] : c.users;
       const nationObj = Array.isArray(c.nations) ? c.nations[0] : c.nations;
+      
+      const claimMatch = matches.find((m: any) => m.home_claim_id === c.id || m.away_claim_id === c.id);
+      const groupName = claimMatch?.group_name || 'TBD';
+
       return {
         id: c.id,
         user_id: c.user_id,
-        group_name: c.group_name,
+        group_name: groupName,
         user: userObj,
         nation: nationObj,
       };

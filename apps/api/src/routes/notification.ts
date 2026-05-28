@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { supabaseAdmin, getFrontendUrl } from '../lib/supabase';
 import { verifySession, requireRole } from '../middleware/auth';
 import { getActiveTournament } from './tournament';
-import { sendEmail, queueEmails, EmailRecipient } from '../services/email';
+import { sendEmail, queueEmails, EmailRecipient, notifyPreQualsStarted, notifyGroupsStarted, notifyKnockoutsStarted } from '../services/email';
 
 const router = Router();
 
@@ -412,6 +412,63 @@ router.post('/admin/notify-winner', verifySession, requireRole('admin'), async (
     });
   } catch (err: any) {
     console.error('[notify-winner] Error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Internal server error' });
+  }
+});
+
+/**
+ * POST /notification/admin/notify-prequal
+ * Manually trigger Pre-Qualifiers notification emails.
+ */
+router.post('/admin/notify-prequal', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const tournament = await getActiveTournament(req.tenantId);
+    if (!tournament) {
+      return res.status(404).json({ success: false, error: 'No active tournament found' });
+    }
+    // Call background service
+    notifyPreQualsStarted(tournament.id, tournament.name);
+    return res.json({ success: true, message: 'Dispatched pre-qualifier emails in background.' });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ success: false, error: err.message || 'Internal server error' });
+  }
+});
+
+/**
+ * POST /notification/admin/notify-groups
+ * Manually trigger Group Stage notification emails.
+ */
+router.post('/admin/notify-groups', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const tournament = await getActiveTournament(req.tenantId);
+    if (!tournament) {
+      return res.status(404).json({ success: false, error: 'No active tournament found' });
+    }
+    // Call background service
+    notifyGroupsStarted(tournament.id, tournament.name);
+    return res.json({ success: true, message: 'Dispatched group stage emails in background.' });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ success: false, error: err.message || 'Internal server error' });
+  }
+});
+
+/**
+ * POST /notification/admin/notify-knockouts
+ * Manually trigger Knockout Stage notification emails.
+ */
+router.post('/admin/notify-knockouts', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const tournament = await getActiveTournament(req.tenantId);
+    if (!tournament) {
+      return res.status(404).json({ success: false, error: 'No active tournament found' });
+    }
+    // Call background service
+    notifyKnockoutsStarted(tournament.id, tournament.name);
+    return res.json({ success: true, message: 'Dispatched knockout stage emails in background.' });
+  } catch (err: any) {
+    console.error(err);
     return res.status(500).json({ success: false, error: err.message || 'Internal server error' });
   }
 });

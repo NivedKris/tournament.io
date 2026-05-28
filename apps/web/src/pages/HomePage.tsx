@@ -90,6 +90,7 @@ export default function HomePage() {
   const [newName, setNewName] = useState('');
   const [newMode, setNewMode] = useState<'world_cup' | 'ucl'>('world_cup');
   const [isAdminActionLoading, setIsAdminActionLoading] = useState(false);
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
   const [adminError, setAdminError] = useState<string | null>(null);
 
   // Reward states
@@ -347,6 +348,54 @@ export default function HomePage() {
       setAdminError(err.response?.data?.error || 'Failed to start knockouts');
     } finally {
       setIsAdminActionLoading(false);
+    }
+  };
+
+  const handleSendPrequalEmails = async () => {
+    setIsSendingNotification(true);
+    try {
+      const res = await api.post('/notification/admin/notify-prequal');
+      if (res.data.success) {
+        alert('Pre-qualifier notification emails queued successfully!');
+      } else {
+        alert(res.data.error || 'Failed to send emails');
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to send emails');
+    } finally {
+      setIsSendingNotification(false);
+    }
+  };
+
+  const handleSendGroupEmails = async () => {
+    setIsSendingNotification(true);
+    try {
+      const res = await api.post('/notification/admin/notify-groups');
+      if (res.data.success) {
+        alert('Group stage notification emails queued successfully!');
+      } else {
+        alert(res.data.error || 'Failed to send emails');
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to send emails');
+    } finally {
+      setIsSendingNotification(false);
+    }
+  };
+
+  const handleSendKnockoutEmails = async () => {
+    setIsSendingNotification(true);
+    try {
+      const res = await api.post('/notification/admin/notify-knockouts');
+      if (res.data.success) {
+        alert('Knockout stage notification emails queued successfully!');
+      } else {
+        alert(res.data.error || 'Failed to send emails');
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to send emails');
+    } finally {
+      setIsSendingNotification(false);
     }
   };
 
@@ -1184,39 +1233,85 @@ export default function HomePage() {
 
                   {/* Pre-Qual Phase Operations */}
                   {tournament.status === 'pre_qual' && (
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={handleDrawGroups}
-                      disabled={
-                        isAdminActionLoading ||
-                        matches.some((m) => m.stage === 'pre_qual' && m.status !== 'verified')
-                      }
-                      title={
-                        matches.some((m) => m.stage === 'pre_qual' && m.status !== 'verified')
-                          ? 'Wait for all pre-qual matches to complete'
-                          : 'Draw groups'
-                      }
-                    >
-                      Draw Group Stage
-                    </button>
+                    <>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={handleDrawGroups}
+                        disabled={
+                          isAdminActionLoading ||
+                          matches.some((m) => m.stage === 'pre_qual' && m.status !== 'verified')
+                        }
+                        title={
+                          matches.some((m) => m.stage === 'pre_qual' && m.status !== 'verified')
+                            ? 'Wait for all pre-qual matches to complete'
+                            : 'Draw groups'
+                        }
+                      >
+                        Draw Group Stage
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={handleSendPrequalEmails}
+                        disabled={isSendingNotification}
+                        style={{
+                          marginLeft: '8px',
+                          border: '1px solid var(--accent)',
+                          color: 'var(--accent)',
+                          background: 'transparent',
+                        }}
+                      >
+                        {isSendingNotification ? 'Sending...' : 'Send Pre-Qual Mail'}
+                      </button>
+                    </>
                   )}
 
                   {/* Group Stage Operations */}
                   {tournament.status === 'group_stage' && (
+                    <>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={handleStartKnockouts}
+                        disabled={
+                          isAdminActionLoading ||
+                          matches.some((m) => m.stage === 'group' && m.status !== 'verified')
+                        }
+                        title={
+                          matches.some((m) => m.stage === 'group' && m.status !== 'verified')
+                            ? 'Wait for all group matches to complete'
+                            : 'Draw knockout bracket'
+                        }
+                      >
+                        Draw Knockout Bracket
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={handleSendGroupEmails}
+                        disabled={isSendingNotification}
+                        style={{
+                          marginLeft: '8px',
+                          border: '1px solid var(--accent)',
+                          color: 'var(--accent)',
+                          background: 'transparent',
+                        }}
+                      >
+                        {isSendingNotification ? 'Sending...' : 'Send Group Mail'}
+                      </button>
+                    </>
+                  )}
+
+                  {/* Knockout Stage Operations */}
+                  {tournament.status === 'knockout' && (
                     <button
-                      className="btn btn-primary btn-sm"
-                      onClick={handleStartKnockouts}
-                      disabled={
-                        isAdminActionLoading ||
-                        matches.some((m) => m.stage === 'group' && m.status !== 'verified')
-                      }
-                      title={
-                        matches.some((m) => m.stage === 'group' && m.status !== 'verified')
-                          ? 'Wait for all group matches to complete'
-                          : 'Draw knockout bracket'
-                      }
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleSendKnockoutEmails}
+                      disabled={isSendingNotification}
+                      style={{
+                        border: '1px solid var(--accent)',
+                        color: 'var(--accent)',
+                        background: 'transparent',
+                      }}
                     >
-                      Draw Knockout Bracket
+                      {isSendingNotification ? 'Sending...' : 'Send Knockouts Mail'}
                     </button>
                   )}
 
