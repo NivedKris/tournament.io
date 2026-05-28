@@ -179,16 +179,35 @@ export async function notifyPreQualsStarted(tournamentId: string, tournamentName
               ul { list-style: none; padding: 0; margin: 24px 0; border-top: 1px solid #2a2a2a; }
               .cta-btn { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #F5C842 0%, #D4AF37 100%); color: #121212; font-weight: 700; font-size: 15px; border-radius: 8px; text-decoration: none; text-align: center; margin-top: 12px; }
               .footer { margin-top: 32px; font-size: 12px; color: #48484a; border-top: 1px solid #2a2a2a; padding-top: 16px; text-align: center; }
+              .info-box { margin-bottom: 24px; padding: 16px; background-color: rgba(245, 200, 66, 0.08); border-left: 4px solid #F5C842; border-radius: 4px; color: #e5e5e5; font-size: 14px; line-height: 1.5; }
+              .instructions { margin: 24px 0; padding: 20px; background-color: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; }
             </style>
           </head>
           <body>
             <div class="card">
               <h2>Pre-Qualifiers Started</h2>
               <p>Hi ${recipient.name || `@${recipient.username}`},</p>
+              
+              <div class="info-box">
+                <strong>What are Pre-Qualifiers?</strong><br/>
+                Pre-Qualifiers occur when multiple managers claim the same country or club. It is a mini-stage where you compete head-to-head with other claimants of that nation to determine who earns the spot in the main tournament group stage.
+              </div>
+
               <p>The Pre-Qualifiers phase has officially commenced for <strong>${tournamentName}</strong>! Here is your scheduled fixture:</p>
               <ul>
                 ${fixturesHtml}
               </ul>
+
+              <div class="instructions">
+                <h3 style="margin-top: 0; color: #F5C842; font-size: 16px; font-weight: 700;">How to Play Your Match:</h3>
+                <ol style="margin: 0; padding-left: 20px; color: #a1a1a6; font-size: 14px; line-height: 1.6;">
+                  <li style="margin-bottom: 8px;">Go to the **My Fixtures** section on the Matchup dashboard.</li>
+                  <li style="margin-bottom: 8px;">Click on your match to open the **Match Chat** to communicate directly with your opponent.</li>
+                  <li style="margin-bottom: 8px;">Create a friendly lobby in eFootball, share the Match Room details in the chat, and play the match.</li>
+                  <li style="margin-bottom: 8px;">Once the match is over, the **winner** must upload a clear screenshot of the final score screen and report the match scorers.</li>
+                </ol>
+              </div>
+
               <div style="text-align: center;">
                 <a href="${frontendUrl}" class="cta-btn">View Fixtures & Report Scores</a>
               </div>
@@ -296,6 +315,7 @@ export async function notifyGroupsStarted(tournamentId: string, tournamentName: 
               ul { list-style: none; padding: 0; margin: 24px 0; border-top: 1px solid #2a2a2a; }
               .cta-btn { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #F5C842 0%, #D4AF37 100%); color: #121212; font-weight: 700; font-size: 15px; border-radius: 8px; text-decoration: none; text-align: center; margin-top: 12px; }
               .footer { margin-top: 32px; font-size: 12px; color: #48484a; border-top: 1px solid #2a2a2a; padding-top: 16px; text-align: center; }
+              .instructions { margin: 24px 0; padding: 20px; background-color: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; }
             </style>
           </head>
           <body>
@@ -307,6 +327,17 @@ export async function notifyGroupsStarted(tournamentId: string, tournamentName: 
               <ul>
                 ${fixturesHtml}
               </ul>
+
+              <div class="instructions">
+                <h3 style="margin-top: 0; color: #F5C842; font-size: 16px; font-weight: 700;">How to Play Your Match:</h3>
+                <ol style="margin: 0; padding-left: 20px; color: #a1a1a6; font-size: 14px; line-height: 1.6;">
+                  <li style="margin-bottom: 8px;">Go to the **My Fixtures** section on the Matchup dashboard.</li>
+                  <li style="margin-bottom: 8px;">Click on your match to open the **Match Chat** to communicate directly with your opponent.</li>
+                  <li style="margin-bottom: 8px;">Create a friendly lobby in eFootball, share the Match Room details in the chat, and play the match.</li>
+                  <li style="margin-bottom: 8px;">Once the match is over, the **winner** must upload a clear screenshot of the final score screen and report the match scorers.</li>
+                </ol>
+              </div>
+
               <div style="text-align: center;">
                 <a href="${frontendUrl}" class="cta-btn">View Standings & Play</a>
               </div>
@@ -413,6 +444,7 @@ export async function notifyKnockoutsStarted(tournamentId: string, tournamentNam
               ul { list-style: none; padding: 0; margin: 24px 0; border-top: 1px solid #2a2a2a; }
               .cta-btn { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #F5C842 0%, #D4AF37 100%); color: #121212; font-weight: 700; font-size: 15px; border-radius: 8px; text-decoration: none; text-align: center; margin-top: 12px; }
               .footer { margin-top: 32px; font-size: 12px; color: #48484a; border-top: 1px solid #2a2a2a; padding-top: 16px; text-align: center; }
+              .instructions { margin: 24px 0; padding: 20px; background-color: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; }
             </style>
           </head>
           <body>
@@ -424,6 +456,17 @@ export async function notifyKnockoutsStarted(tournamentId: string, tournamentNam
               <ul>
                 ${fixturesHtml}
               </ul>
+
+              <div class="instructions">
+                <h3 style="margin-top: 0; color: #F5C842; font-size: 16px; font-weight: 700;">How to Play Your Match:</h3>
+                <ol style="margin: 0; padding-left: 20px; color: #a1a1a6; font-size: 14px; line-height: 1.6;">
+                  <li style="margin-bottom: 8px;">Go to the **My Fixtures** section on the Matchup dashboard.</li>
+                  <li style="margin-bottom: 8px;">Click on your match to open the **Match Chat** to communicate directly with your opponent.</li>
+                  <li style="margin-bottom: 8px;">Create a friendly lobby in eFootball, share the Match Room details in the chat, and play the match.</li>
+                  <li style="margin-bottom: 8px;">Once the match is over, the **winner** must upload a clear screenshot of the final score screen and report the match scorers.</li>
+                </ol>
+              </div>
+
               <div style="text-align: center;">
                 <a href="${frontendUrl}" class="cta-btn">Access Knockout Bracket</a>
               </div>
