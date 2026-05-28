@@ -354,9 +354,41 @@ export default function PublicProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isTogglingLock, setIsTogglingLock] = useState(false);
 
   // Bench side panel drawer state
   const [showSubsDrawer, setShowSubsDrawer] = useState(false);
+
+  const handleToggleLock = async () => {
+    if (!squad) return;
+    const nextLockedState = !squad.locked;
+    const confirmMessage = nextLockedState 
+      ? "Are you sure you want to LOCK this squad? The player will no longer be able to make changes."
+      : "Are you sure you want to UNLOCK this squad? The player will be allowed to modify their squad again.";
+      
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsTogglingLock(true);
+    try {
+      const response = await api.post('/squad/lock', {
+        claimId,
+        lock: nextLockedState,
+      });
+      if (response.data.success) {
+        setSquad((prev: any) => prev ? { ...prev, locked: nextLockedState } : null);
+        alert(`Squad successfully ${nextLockedState ? 'locked' : 'unlocked'}.`);
+      } else {
+        alert(response.data.error || "Failed to update lock status.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.error || "An error occurred while changing squad lock status.");
+    } finally {
+      setIsTogglingLock(false);
+    }
+  };
 
   const handleRemovePlayer = async () => {
     if (!window.confirm("WARNING: This will permanently remove this player from the tournament, delete their squad, matches, and release their claimed nation.\n\nAre you sure you want to completely remove this player?")) {
@@ -506,6 +538,20 @@ export default function PublicProfilePage() {
                 >
                   Edit Squad (Admin)
                 </button>
+                {squad && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleToggleLock}
+                    disabled={isTogglingLock}
+                    style={{
+                      border: squad.locked ? '1px solid var(--warning, #f59e0b)' : '1px solid var(--success, #10b981)',
+                      color: squad.locked ? 'var(--warning, #f59e0b)' : 'var(--success, #10b981)',
+                      background: 'transparent',
+                    }}
+                  >
+                    {isTogglingLock ? 'Updating...' : squad.locked ? 'Unlock Squad' : 'Lock Squad'}
+                  </button>
+                )}
                 <button
                   className="btn btn-danger btn-sm"
                   onClick={handleRemovePlayer}
@@ -534,6 +580,12 @@ export default function PublicProfilePage() {
             <div className="stat-card">
               <span className="stat-label">Players</span>
               <span className="stat-value">{players.length}/26</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Squad Lock</span>
+              <span className="stat-value" style={{ color: squad?.locked ? 'var(--success, #10b981)' : 'var(--warning, #f59e0b)' }}>
+                {squad ? (squad.locked ? 'Locked' : 'Open') : 'No Squad'}
+              </span>
             </div>
           </div>
         </div>

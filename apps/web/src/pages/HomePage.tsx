@@ -1682,8 +1682,8 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Participants Grid (Always show below main content during registration/pre_qual) */}
-            {tournament.status === 'registration' && (
+            {/* Participants Grid (Always show below main content) */}
+            {tournament && (
               <div className="participants-section mt-8">
                 <h3>Registered Managers</h3>
                 <div className="participants-grid">

@@ -344,7 +344,7 @@ router.post('/lock', verifySession, requireActive, async (req: Request, res: Res
     }
 
     // 4. Validate starting 11 and 15 subs are filled when locking
-    if (shouldLock && !squad.screenshot_url) {
+    if (shouldLock && !squad.screenshot_url && req.user!.role !== 'admin') {
       const reqPositions = FORMATION_POSITIONS[squad.formation];
       if (!reqPositions) {
         return res.status(400).json({ success: false, error: `Invalid squad formation: ${squad.formation}` });
