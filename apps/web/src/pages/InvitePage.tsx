@@ -20,7 +20,7 @@ interface InviteDetails {
 export default function InvitePage() {
   const { inviteId } = useParams<{ inviteId: string }>();
   const navigate = useNavigate();
-  const { signInWithGoogle, user } = useAuthStore();
+  const { signInWithGoogle } = useAuthStore();
   const [details, setDetails] = useState<InviteDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

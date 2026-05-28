@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTenant } from '../components/TenantProvider';
 import { getTenantSlug } from '../lib/api';
 import { supabase } from '../lib/supabase';
+import PWAInstallButton from '../components/PWAInstallButton';
 
 export default function LoginPage() {
   const { user, signInWithGoogle } = useAuthStore();
@@ -112,6 +113,7 @@ export default function LoginPage() {
           © {new Date().getFullYear()} MARK.ORG. All rights reserved.
         </p>
       </div>
+      <PWAInstallButton />
     </div>
   );
 }

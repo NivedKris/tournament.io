@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+
 import api, { getTenantSlug } from '../lib/api';
 
 export interface Tenant {
@@ -25,7 +25,7 @@ export function useTenant() {
 export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const location = useLocation();
+
   const slug = getTenantSlug();
 
   useEffect(() => {

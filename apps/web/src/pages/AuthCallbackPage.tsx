@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import LoadingScreen from '../components/LoadingScreen';
-import api from '../lib/api';
+
 
 /**
  * Supabase redirects back to /auth/callback after Google OAuth.
