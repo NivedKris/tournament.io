@@ -17,6 +17,7 @@ import SelectTenantPage from './pages/SelectTenantPage';
 
 import { TenantProvider } from './components/TenantProvider';
 import SuperAdminPage from './pages/SuperAdminPage';
+import MatchPage from './pages/MatchPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +67,7 @@ export default function App() {
             <Route element={<ProtectedLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/squad-builder" element={<SquadBuilderPage />} />
+              <Route path="/match/:matchId" element={<MatchPage />} />
               <Route path="/super-admin" element={<SuperAdminPage />} />
               <Route path="/select-tenant" element={<SelectTenantPage />} />
             </Route>

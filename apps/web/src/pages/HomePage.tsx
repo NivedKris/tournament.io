@@ -7,7 +7,6 @@ import { useTenant } from '../components/TenantProvider';
 import NationPicker from '../components/NationPicker';
 import GroupStandingsTable from '../components/GroupStandingsTable';
 import KnockoutBracket from '../components/KnockoutBracket';
-import MatchDetailModal from '../components/MatchDetailModal';
 import TournamentStatsTab from '../components/TournamentStatsTab';
 import CelebrationCanvas from '../components/CelebrationCanvas';
 import AdminNotificationDrawer from '../components/AdminNotificationDrawer';
@@ -85,7 +84,6 @@ export default function HomePage() {
   const [showClaimPicker, setShowClaimPicker] = useState(!isTenantAdmin);
   const [activeTab, setActiveTab] = useState<TabType>('fixtures');
   const [fixtureFilter, setFixtureFilter] = useState<'all' | 'my'>('all');
-  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [showPushBannerGlobal, setShowPushBannerGlobal] = useState(false);
 
   // Admin states
@@ -239,18 +237,18 @@ export default function HomePage() {
     }
   };
 
-  // Open match detail modal if matchId is in URL query parameters (e.g. from notification click)
+  // Redirect to match page if matchId is in URL query parameters (e.g. from notification click)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mId = params.get('matchId');
     if (mId) {
-      setSelectedMatchId(mId);
-      // Clean query params so it doesn't reopen next time
+      // Clean query params so it doesn't loop
       const url = new URL(window.location.href);
       url.searchParams.delete('matchId');
       window.history.replaceState({}, '', url.toString());
+      navigate(`/match/${mId}`);
     }
-  }, []);
+  }, [navigate]);
 
   // Update claim picker when user role loads
   useEffect(() => {
@@ -1549,7 +1547,7 @@ export default function HomePage() {
                         <div
                           key={m.id}
                           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(239, 68, 68, 0.04)', border: '1px solid rgba(239, 68, 68, 0.15)', padding: '10px 14px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}
-                          onClick={() => setSelectedMatchId(m.id)}
+                          onClick={() => navigate(`/match/${m.id}`)}
                           className="disputed-inbox-item"
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1736,7 +1734,7 @@ export default function HomePage() {
                           <div
                             key={m.id}
                             className={`fixture-list-card clickable status-${m.status}`}
-                            onClick={() => setSelectedMatchId(m.id)}
+                            onClick={() => navigate(`/match/${m.id}`)}
                           >
                             <span className="fixture-stage-label font-mono">
                               {m.stage === 'pre_qual' ? 'Pre-Qual' : m.stage === 'group' ? `Group ${m.group_name}` : `Round of ${m.round}`}
@@ -1810,7 +1808,7 @@ export default function HomePage() {
                     <KnockoutBracket
                       matches={matches}
                       userClaimId={userClaim?.id}
-                      onMatchClick={(id) => setSelectedMatchId(id)}
+                      onMatchClick={(id) => navigate(`/match/${id}`)}
                     />
                   </div>
                 )}
@@ -1874,16 +1872,7 @@ export default function HomePage() {
 
       </div>
 
-      {/* Match Detail / Submit / Verification Modal */}
-      {selectedMatchId && (
-        <MatchDetailModal
-          matchId={selectedMatchId}
-          currentUserId={user?.id || ''}
-          isAdmin={isTenantAdmin}
-          onClose={() => setSelectedMatchId(null)}
-          onRefresh={loadData}
-        />
-      )}
+
 
       {/* Admin Notification Drawer */}
       <AdminNotificationDrawer
