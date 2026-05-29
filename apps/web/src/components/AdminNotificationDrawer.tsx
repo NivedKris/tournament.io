@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import api from '../lib/api';
 
 interface AdminNotificationDrawerProps {
@@ -17,9 +17,9 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
 
   if (!isOpen) return null;
 
-  const handleSendBroadcast = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!subject.trim() || !message.trim()) return;
+  const handleSendBroadcast = async (channel: 'email' | 'push') => {
+    if (channel === 'email' && (!subject.trim() || !message.trim())) return;
+    if (channel === 'push' && !message.trim()) return;
 
     setIsLoading(true);
     setSuccessMsg(null);
@@ -27,12 +27,15 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
 
     try {
       const res = await api.post('/notification/admin/broadcast', {
-        subject: subject.trim(),
+        subject: subject.trim() || 'Broadcast Announcement',
         message: message.trim(),
+        channel
       });
       if (res.data.success) {
-        setSuccessMsg(res.data.message || 'Broadcast announcement sent successfully!');
-        setSubject('');
+        setSuccessMsg(res.data.message || `Broadcast ${channel} sent successfully!`);
+        if (channel === 'email') {
+          setSubject('');
+        }
         setMessage('');
       } else {
         setErrorMsg(res.data.error || 'Failed to dispatch broadcast.');
@@ -44,15 +47,15 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
     }
   };
 
-  const handleSendReminders = async () => {
+  const handleSendReminders = async (channel: 'email' | 'push') => {
     setIsLoading(true);
     setSuccessMsg(null);
     setErrorMsg(null);
 
     try {
-      const res = await api.post('/notification/admin/remind-pending');
+      const res = await api.post('/notification/admin/remind-pending', { channel });
       if (res.data.success) {
-        setSuccessMsg(res.data.message || 'Pending match reminders sent successfully!');
+        setSuccessMsg(res.data.message || `Pending match reminders ${channel} sent successfully!`);
       } else {
         setErrorMsg(res.data.error || 'Failed to send reminders.');
       }
@@ -63,8 +66,7 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
     }
   };
 
-  const handleSendWinnerNotification = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendWinnerNotification = async (channel: 'email' | 'push') => {
     if (!winnerMessage.trim()) return;
 
     setIsLoading(true);
@@ -74,9 +76,10 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
     try {
       const res = await api.post('/notification/admin/notify-winner', {
         message: winnerMessage.trim(),
+        channel
       });
       if (res.data.success) {
-        setSuccessMsg(res.data.message || 'Winner reward claim instruction email sent successfully!');
+        setSuccessMsg(res.data.message || `Winner claim instructions ${channel} sent successfully!`);
         setWinnerMessage('');
       } else {
         setErrorMsg(res.data.error || 'Failed to dispatch winner notification.');
@@ -221,40 +224,74 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
               Outstanding Matches
             </h4>
             <p style={{ margin: '0 0 16px 0', fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>
-              Instantly scan and email a consolidated list of unplayed fixtures to players with outstanding matches in the active stage.
+              Instantly scan and remind players with outstanding matches in the active stage.
             </p>
-            <button
-              onClick={handleSendReminders}
-              disabled={isLoading}
-              style={{
-                width: '100%',
-                padding: '10px',
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '8px',
-                color: '#fff',
-                fontSize: '0.82rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-              }}
-              onMouseEnter={(e) => {
-                if (!isLoading) e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
-              }}
-              onMouseLeave={(e) => {
-                if (!isLoading) e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
-              }}
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 2L11 13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-              {isLoading ? 'Processing...' : 'Email Pending Match Reminders'}
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => handleSendReminders('email')}
+                disabled={isLoading}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  color: '#fff',
+                  fontSize: '0.82rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isLoading) e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isLoading) e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 2L11 13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+                {isLoading ? '...' : 'Email Reminders'}
+              </button>
+              <button
+                onClick={() => handleSendReminders('push')}
+                disabled={isLoading}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  borderRadius: '8px',
+                  color: '#60a5fa',
+                  fontSize: '0.82rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isLoading) e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isLoading) e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                {isLoading ? '...' : 'Push Reminders'}
+              </button>
+            </div>
           </div>
 
           {/* Broadcast Form */}
@@ -262,17 +299,16 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
             <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'rgba(255,255,255,0.9)' }}>
               Broadcast Announcement
             </h4>
-            <form onSubmit={handleSendBroadcast} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.72rem', fontWeight: '700', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Email Subject
+                  Email Subject (Only needed for email)
                 </label>
                 <input
                   type="text"
                   placeholder="e.g. Schedule updates for Playoffs"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  required
                   disabled={isLoading}
                   style={{
                     background: 'rgba(255, 255, 255, 0.03)',
@@ -297,7 +333,6 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
                   placeholder="Type your tournament announcement here..."
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  required
                   disabled={isLoading}
                   rows={8}
                   style={{
@@ -317,34 +352,77 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={isLoading || !subject.trim() || !message.trim()}
-                style={{
-                  padding: '12px',
-                  background: 'linear-gradient(135deg, #F5C842 0%, #D4AF37 100%)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#121212',
-                  fontSize: '0.85rem',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  transition: 'opacity 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                  <polyline points="22,6 12,13 2,6" />
-                </svg>
-                {isLoading ? 'Queuing Deliveries...' : 'Send Broadcast Email'}
-              </button>
-            </form>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => handleSendBroadcast('email')}
+                  disabled={isLoading || !subject.trim() || !message.trim()}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: 'linear-gradient(135deg, #F5C842 0%, #D4AF37 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#121212',
+                    fontSize: '0.85rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'opacity 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    opacity: (isLoading || !subject.trim() || !message.trim()) ? 0.5 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isLoading && subject.trim() && message.trim()) e.currentTarget.style.opacity = '0.9';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isLoading && subject.trim() && message.trim()) e.currentTarget.style.opacity = '1';
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
+                  </svg>
+                  {isLoading ? '...' : 'Broadcast Email'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendBroadcast('push')}
+                  disabled={isLoading || !message.trim()}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: 'rgba(59, 130, 246, 0.1)',
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    borderRadius: '8px',
+                    color: '#60a5fa',
+                    fontSize: '0.85rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    opacity: (isLoading || !message.trim()) ? 0.5 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isLoading && message.trim()) e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isLoading && message.trim()) e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                  {isLoading ? '...' : 'Broadcast Push'}
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Winner Direct Notification (Only when tournament is completed) */}
@@ -356,7 +434,7 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
               <p style={{ margin: '0 0 4px 0', fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>
                 Send custom reward claim instructions directly to the champion of the completed tournament.
               </p>
-              <form onSubmit={handleSendWinnerNotification} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '0.72rem', fontWeight: '700', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Reward & Claim Instructions
@@ -365,7 +443,6 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
                     placeholder="Provide reward instructions (e.g. contact details, claiming codes)..."
                     value={winnerMessage}
                     onChange={(e) => setWinnerMessage(e.target.value)}
-                    required
                     disabled={isLoading}
                     rows={6}
                     style={{
@@ -385,33 +462,77 @@ export default function AdminNotificationDrawer({ isOpen, onClose, tournamentSta
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isLoading || !winnerMessage.trim()}
-                  style={{
-                    padding: '12px',
-                    background: 'linear-gradient(135deg, #F5C842 0%, #D4AF37 100%)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: '#121212',
-                    fontSize: '0.85rem',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    transition: 'opacity 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
-                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-                >
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="5 3 19 12 5 21 5 3" />
-                  </svg>
-                  {isLoading ? 'Sending...' : 'Email Claim Instructions to Winner'}
-                </button>
-              </form>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleSendWinnerNotification('email')}
+                    disabled={isLoading || !winnerMessage.trim()}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: 'linear-gradient(135deg, #F5C842 0%, #D4AF37 100%)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: '#121212',
+                      fontSize: '0.85rem',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      transition: 'opacity 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      opacity: (isLoading || !winnerMessage.trim()) ? 0.5 : 1,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isLoading && winnerMessage.trim()) e.currentTarget.style.opacity = '0.9';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isLoading && winnerMessage.trim()) e.currentTarget.style.opacity = '1';
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                      <polyline points="22,6 12,13 2,6" />
+                    </svg>
+                    {isLoading ? '...' : 'Email Winner'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSendWinnerNotification('push')}
+                    disabled={isLoading || !winnerMessage.trim()}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: 'rgba(59, 130, 246, 0.1)',
+                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                      borderRadius: '8px',
+                      color: '#60a5fa',
+                      fontSize: '0.85rem',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      opacity: (isLoading || !winnerMessage.trim()) ? 0.5 : 1,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isLoading && winnerMessage.trim()) e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isLoading && winnerMessage.trim()) e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                    </svg>
+                    {isLoading ? '...' : 'Push Winner'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

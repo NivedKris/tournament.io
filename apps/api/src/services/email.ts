@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { supabaseAdmin, getFrontendUrl } from '../lib/supabase';
 import { getTournamentStatsRaw } from './stats';
+import { sendUserPushNotification } from './push';
 
 dotenv.config();
 
@@ -220,6 +221,17 @@ export async function notifyPreQualsStarted(tournamentId: string, tournamentName
         `;
       }
     );
+
+    // Dispatch push notifications
+    for (const [userId, data] of userFixtures.entries()) {
+      const fixturesCount = data.fixtures.length;
+      const fixturesText = fixturesCount === 1 ? '1 fixture' : `${fixturesCount} fixtures`;
+      sendUserPushNotification(userId, {
+        title: 'Pre-Qualifiers Started',
+        body: `Your Pre-Qualifier matchups are live! You have ${fixturesText} scheduled in ${tournamentName}.`,
+        url: '/'
+      });
+    }
   } catch (err) {
     console.error('[notifyPreQualsStarted] Error:', err);
   }
@@ -353,6 +365,17 @@ export async function notifyGroupsStarted(tournamentId: string, tournamentName: 
         `;
       }
     );
+
+    // Dispatch push notifications
+    for (const [userId, data] of userFixtures.entries()) {
+      const fixturesCount = data.fixtures.length;
+      const fixturesText = fixturesCount === 1 ? '1 fixture' : `${fixturesCount} fixtures`;
+      sendUserPushNotification(userId, {
+        title: 'Group Stage Commenced',
+        body: `You have been placed in Group ${data.groupName}! Play your ${fixturesText} now in ${tournamentName}.`,
+        url: '/'
+      });
+    }
   } catch (err) {
     console.error('[notifyGroupsStarted] Error:', err);
   }
@@ -482,6 +505,17 @@ export async function notifyKnockoutsStarted(tournamentId: string, tournamentNam
         `;
       }
     );
+
+    // Dispatch push notifications
+    for (const [userId, data] of userFixtures.entries()) {
+      const fixturesCount = data.fixtures.length;
+      const fixturesText = fixturesCount === 1 ? '1 fixture' : `${fixturesCount} fixtures`;
+      sendUserPushNotification(userId, {
+        title: 'Knockout Stage Commenced',
+        body: `Congratulations! You qualified for the Knockout Stage in ${tournamentName}! Play your ${fixturesText} now.`,
+        url: '/'
+      });
+    }
   } catch (err) {
     console.error('[notifyKnockoutsStarted] Error:', err);
   }
@@ -521,7 +555,7 @@ export async function notifyTournamentWinner(tournamentId: string, tournamentNam
       topGlove = `${tg.player?.name || 'Unknown'} (${tg.claim?.nations?.name || 'Unknown'}) - ${tg.cleanSheets} Clean Sheets`;
     }
 
-    const { data: users } = await supabaseAdmin.from('users').select('email, display_name, username').not('email', 'is', null).neq('email', '');
+    const { data: users } = await supabaseAdmin.from('users').select('id, email, display_name, username').not('email', 'is', null).neq('email', '');
     if (!users || users.length === 0) return;
 
     const winnerUser = Array.isArray(winnerClaim?.users) ? winnerClaim.users[0] : (winnerClaim?.users as any);
@@ -595,6 +629,17 @@ export async function notifyTournamentWinner(tournamentId: string, tournamentNam
         `;
       }
     );
+
+    // Dispatch push notifications to all users
+    if (users && users.length > 0) {
+      for (const u of users) {
+        sendUserPushNotification(u.id, {
+          title: '🏆 Tournament Completed! 🏆',
+          body: `Champion crowned in ${tournamentName}! Tap to view final standings and statistics.`,
+          url: '/'
+        });
+      }
+    }
   } catch (err) {
     console.error('[notifyTournamentWinner] Error:', err);
   }

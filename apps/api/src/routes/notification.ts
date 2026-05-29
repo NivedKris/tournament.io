@@ -3,6 +3,7 @@ import { supabaseAdmin, getFrontendUrl } from '../lib/supabase';
 import { verifySession, requireRole } from '../middleware/auth';
 import { getActiveTournament } from './tournament';
 import { sendEmail, queueEmails, EmailRecipient, notifyPreQualsStarted, notifyGroupsStarted, notifyKnockoutsStarted } from '../services/email';
+import { sendUserPushNotification } from '../services/push';
 
 const router = Router();
 
@@ -12,6 +13,10 @@ const router = Router();
  */
 router.post('/admin/remind-pending', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
   try {
+    const { channel } = req.body as { channel?: 'email' | 'push' | 'both' };
+    const sendEmailEnabled = !channel || channel === 'email' || channel === 'both';
+    const sendPushEnabled = !channel || channel === 'push' || channel === 'both';
+
     const tournament = await getActiveTournament(req.tenantId);
     if (!tournament) {
       return res.status(404).json({ success: false, error: 'No active tournament found' });
@@ -136,59 +141,78 @@ router.post('/admin/remind-pending', verifySession, requireRole('admin'), async 
 
     const frontendUrl = getFrontendUrl(req);
 
-    // Dispatch emails sequentially in background
-    queueEmails(
-      recipients.map(r => r.recipient),
-      `Matchup Reminder: You have pending matches in ${tournament.name}`,
-      (recipient) => {
-        const matchingClaim = claims.find(c => c.user?.email === recipient.email);
-        const userFixtures = userPendingFixtures.get(matchingClaim?.user_id || '')?.fixtures || [];
-        const fixturesListHtml = userFixtures.map(f => `
-          <li style="padding: 10px 0; border-bottom: 1px solid #2a2a2a; color: #ffffff; font-size: 15px;">
-            <strong style="color: #F5C842;">Fixture:</strong> ${f}
-          </li>
-        `).join('');
+    if (sendEmailEnabled) {
+      // Dispatch emails sequentially in background
+      queueEmails(
+        recipients.map(r => r.recipient),
+        `Matchup Reminder: You have pending matches in ${tournament.name}`,
+        (recipient) => {
+          const matchingClaim = claims.find(c => c.user?.email === recipient.email);
+          const userFixtures = userPendingFixtures.get(matchingClaim?.user_id || '')?.fixtures || [];
+          const fixturesListHtml = userFixtures.map(f => `
+            <li style="padding: 10px 0; border-bottom: 1px solid #2a2a2a; color: #ffffff; font-size: 15px;">
+              <strong style="color: #F5C842;">Fixture:</strong> ${f}
+            </li>
+          `).join('');
 
-        return `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <style>
-              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #e5e5e5; margin: 0; padding: 24px; }
-              .card { max-width: 580px; margin: 0 auto; background-color: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 16px; padding: 32px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
-              h2 { font-size: 22px; font-weight: 800; color: #ffffff; margin-top: 0; letter-spacing: -0.02em; }
-              p { font-size: 15px; line-height: 1.6; color: #a1a1a6; }
-              ul { list-style: none; padding: 0; margin: 24px 0; border-top: 1px solid #2a2a2a; }
-              .cta-btn { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #F5C842 0%, #D4AF37 100%); color: #121212; font-weight: 700; font-size: 15px; border-radius: 8px; text-decoration: none; text-align: center; margin-top: 12px; }
-              .footer { margin-top: 32px; font-size: 12px; color: #48484a; border-top: 1px solid #2a2a2a; padding-top: 16px; text-align: center; }
-            </style>
-          </head>
-          <body>
-            <div class="card">
-              <h2>Pending Match Reminder</h2>
-              <p>Hi ${recipient.name || `@${recipient.username}`},</p>
-              <p>You have outstanding fixtures to play in <strong>${tournament.name}</strong> (${tournament.status === 'pre_qual' ? 'Pre-Qualifiers' : tournament.status === 'group_stage' ? 'Group Stage' : 'Knockout Stage'}). Please connect with your opponents and complete them as soon as possible:</p>
-              
-              <ul>
-                ${fixturesListHtml}
-              </ul>
-              
-              <div style="text-align: center;">
-                <a href="${frontendUrl}" class="cta-btn">Access Matchup Dashboard</a>
+          return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #e5e5e5; margin: 0; padding: 24px; }
+                .card { max-width: 580px; margin: 0 auto; background-color: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 16px; padding: 32px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+                h2 { font-size: 22px; font-weight: 800; color: #ffffff; margin-top: 0; letter-spacing: -0.02em; }
+                p { font-size: 15px; line-height: 1.6; color: #a1a1a6; }
+                ul { list-style: none; padding: 0; margin: 24px 0; border-top: 1px solid #2a2a2a; }
+                .cta-btn { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #F5C842 0%, #D4AF37 100%); color: #121212; font-weight: 700; font-size: 15px; border-radius: 8px; text-decoration: none; text-align: center; margin-top: 12px; }
+                .footer { margin-top: 32px; font-size: 12px; color: #48484a; border-top: 1px solid #2a2a2a; padding-top: 16px; text-align: center; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h2>Pending Match Reminder</h2>
+                <p>Hi ${recipient.name || `@${recipient.username}`},</p>
+                <p>You have outstanding fixtures to play in <strong>${tournament.name}</strong> (${tournament.status === 'pre_qual' ? 'Pre-Qualifiers' : tournament.status === 'group_stage' ? 'Group Stage' : 'Knockout Stage'}). Please connect with your opponents and complete them as soon as possible:</p>
+                
+                <ul>
+                  ${fixturesListHtml}
+                </ul>
+                
+                <div style="text-align: center;">
+                  <a href="${frontendUrl}" class="cta-btn">Access Matchup Dashboard</a>
+                </div>
+                
+                <div class="footer">
+                  Matchup Tournament Management platform. Generously automated.
+                </div>
               </div>
-              
-              <div class="footer">
-                Matchup Tournament Management platform. Generously automated.
-              </div>
-            </div>
-          </body>
-          </html>
-        `;
+            </body>
+            </html>
+          `;
+        }
+      );
+    }
+
+    if (sendPushEnabled) {
+      // Dispatch push notifications
+      for (const [userId, data] of userPendingFixtures.entries()) {
+        const fixturesCount = data.fixtures.length;
+        const fixturesText = fixturesCount === 1 ? '1 pending fixture' : `${fixturesCount} pending fixtures`;
+        sendUserPushNotification(userId, {
+          title: 'Pending Match Reminder',
+          body: `You have ${fixturesText} to play in ${tournament.name}. Connect with your opponent!`,
+          url: frontendUrl
+        });
       }
-    );
+    }
 
-    return res.json({ success: true, message: `Dispatched ${recipients.length} reminder email(s) in background.` });
+    let channelText = 'email(s) and push notification(s)';
+    if (channel === 'email') channelText = 'email(s)';
+    if (channel === 'push') channelText = 'push notification(s)';
+
+    return res.json({ success: true, message: `Dispatched ${recipients.length} reminder ${channelText} in background.` });
   } catch (err: any) {
     console.error('[remind-pending] Error:', err);
     return res.status(500).json({ success: false, error: err.message || 'Internal server error' });
@@ -201,7 +225,9 @@ router.post('/admin/remind-pending', verifySession, requireRole('admin'), async 
  */
 router.post('/admin/broadcast', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { subject, message } = req.body as { subject?: string; message?: string };
+    const { subject, message, channel } = req.body as { subject?: string; message?: string; channel?: 'email' | 'push' | 'both' };
+    const sendEmailEnabled = !channel || channel === 'email' || channel === 'both';
+    const sendPushEnabled = !channel || channel === 'push' || channel === 'both';
 
     if (!subject?.trim() || !message?.trim()) {
       return res.status(400).json({ success: false, error: 'Subject and message are required.' });
@@ -216,6 +242,7 @@ router.post('/admin/broadcast', verifySession, requireRole('admin'), async (req:
     const { data: claims, error: claimsErr } = await supabaseAdmin
       .from('nation_claims')
       .select(`
+        user_id,
         users!inner (
           email,
           display_name,
@@ -230,11 +257,12 @@ router.post('/admin/broadcast', verifySession, requireRole('admin'), async (req:
     }
 
     // Extract unique users with valid emails
-    const userMap = new Map<string, { email: string; display_name: string; username: string }>();
+    const userMap = new Map<string, { userId: string; email: string; display_name: string; username: string }>();
     for (const claim of claims) {
       const u = Array.isArray(claim.users) ? claim.users[0] : (claim.users as any);
-      if (u && u.email && u.email.trim()) {
+      if (u && u.email && u.email.trim() && claim.user_id) {
         userMap.set(u.email.trim().toLowerCase(), {
+          userId: claim.user_id,
           email: u.email.trim(),
           display_name: u.display_name,
           username: u.username,
@@ -250,45 +278,62 @@ router.post('/admin/broadcast', verifySession, requireRole('admin'), async (req:
 
     const frontendUrl = getFrontendUrl(req);
 
-    queueEmails(
-      users.map(u => ({ email: u.email!, name: u.display_name, username: u.username })),
-      subject.trim(),
-      (recipient) => {
-        return `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <style>
-              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #e5e5e5; margin: 0; padding: 24px; }
-              .card { max-width: 580px; margin: 0 auto; background-color: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 16px; padding: 32px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
-              h2 { font-size: 22px; font-weight: 800; color: #ffffff; margin-top: 0; letter-spacing: -0.02em; }
-              p { font-size: 15px; line-height: 1.6; color: #a1a1a6; white-space: pre-wrap; }
-              .cta-btn { display: inline-block; padding: 12px 24px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #ffffff; font-weight: 600; font-size: 14px; border-radius: 8px; text-decoration: none; text-align: center; margin-top: 16px; }
-              .footer { margin-top: 32px; font-size: 12px; color: #48484a; border-top: 1px solid #2a2a2a; padding-top: 16px; text-align: center; }
-            </style>
-          </head>
-          <body>
-            <div class="card">
-              <h2>Tournament Broadcast Announcement</h2>
-              <p>Hi ${recipient.name || `@${recipient.username}`},</p>
-              <p>${message.trim()}</p>
-              
-              <div style="text-align: center;">
-                <a href="${frontendUrl}" class="cta-btn">Open Matchup App</a>
+    if (sendEmailEnabled) {
+      queueEmails(
+        users.map(u => ({ email: u.email!, name: u.display_name, username: u.username })),
+        subject.trim(),
+        (recipient) => {
+          return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #e5e5e5; margin: 0; padding: 24px; }
+                .card { max-width: 580px; margin: 0 auto; background-color: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 16px; padding: 32px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+                h2 { font-size: 22px; font-weight: 800; color: #ffffff; margin-top: 0; letter-spacing: -0.02em; }
+                p { font-size: 15px; line-height: 1.6; color: #a1a1a6; white-space: pre-wrap; }
+                .cta-btn { display: inline-block; padding: 12px 24px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #ffffff; font-weight: 600; font-size: 14px; border-radius: 8px; text-decoration: none; text-align: center; margin-top: 16px; }
+                .footer { margin-top: 32px; font-size: 12px; color: #48484a; border-top: 1px solid #2a2a2a; padding-top: 16px; text-align: center; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h2>Tournament Broadcast Announcement</h2>
+                <p>Hi ${recipient.name || `@${recipient.username}`},</p>
+                <p>${message.trim()}</p>
+                
+                <div style="text-align: center;">
+                  <a href="${frontendUrl}" class="cta-btn">Open Matchup App</a>
+                </div>
+                
+                <div class="footer">
+                  Matchup Tournament Management platform.
+                </div>
               </div>
-              
-              <div class="footer">
-                Matchup Tournament Management platform.
-              </div>
-            </div>
-          </body>
-          </html>
-        `;
-      }
-    );
+            </body>
+            </html>
+          `;
+        }
+      );
+    }
 
-    return res.json({ success: true, message: `Dispatched announcement broadcast to ${users.length} user(s) in background.` });
+    if (sendPushEnabled) {
+      // Dispatch push notifications
+      for (const u of users) {
+        sendUserPushNotification(u.userId, {
+          title: subject.trim(),
+          body: message.trim(),
+          url: frontendUrl
+        });
+      }
+    }
+
+    let channelText = 'email and push notification';
+    if (channel === 'email') channelText = 'email';
+    if (channel === 'push') channelText = 'push notification';
+
+    return res.json({ success: true, message: `Dispatched announcement broadcast to ${users.length} user(s) via ${channelText} in background.` });
   } catch (err: any) {
     console.error('[broadcast] Error:', err);
     return res.status(500).json({ success: false, error: err.message || 'Internal server error' });
@@ -301,7 +346,10 @@ router.post('/admin/broadcast', verifySession, requireRole('admin'), async (req:
  */
 router.post('/admin/notify-winner', verifySession, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { message } = req.body as { message?: string };
+    const { message, channel } = req.body as { message?: string; channel?: 'email' | 'push' | 'both' };
+    const sendEmailEnabled = !channel || channel === 'email' || channel === 'both';
+    const sendPushEnabled = !channel || channel === 'push' || channel === 'both';
+
     if (!message?.trim()) {
       return res.status(400).json({ success: false, error: 'Message content is required.' });
     }
@@ -326,6 +374,7 @@ router.post('/admin/notify-winner', verifySession, requireRole('admin'), async (
       .select(`
         id,
         status,
+        user_id,
         users!inner (
           email,
           display_name,
@@ -403,12 +452,26 @@ router.post('/admin/notify-winner', verifySession, requireRole('admin'), async (
       </html>
     `;
 
-    // Queue email sequentially
-    queueEmails([recipient], subject, () => mailHtml);
+    if (sendEmailEnabled) {
+      // Queue email sequentially
+      queueEmails([recipient], subject, () => mailHtml);
+    }
+
+    if (sendPushEnabled && winnerClaim.user_id) {
+      sendUserPushNotification(winnerClaim.user_id, {
+        title: '🏆 Tournament Champion! 🏆',
+        body: `Congratulations on winning ${tournament.name}! Read details to claim your reward.`,
+        url: frontendUrl
+      });
+    }
+
+    let channelText = 'email and push notification';
+    if (channel === 'email') channelText = 'email';
+    if (channel === 'push') channelText = 'push notification';
 
     return res.json({
       success: true,
-      message: `Direct claim notification email queued successfully for the champion (${recipient.email}).`,
+      message: `Direct claim notification ${channelText} queued successfully for the champion (${recipient.email}).`,
     });
   } catch (err: any) {
     console.error('[notify-winner] Error:', err);
