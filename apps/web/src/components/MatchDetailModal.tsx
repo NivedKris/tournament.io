@@ -769,35 +769,56 @@ export default function MatchDetailModal({
                   </div>
                 )}
                 {match.events && match.events.length > 0 && (() => {
-                  // Group flat events into goal rows with optional assist
-                  const goals = match.events.filter((e: any) => e.event_type === 'goal');
-                  const assists = match.events.filter((e: any) => e.event_type === 'assist');
+                  const pairedEvents: Array<{
+                    id: string;
+                    goal: any;
+                    assist: any | null;
+                  }> = [];
+
+                  // Group by claim_id to align scorer and assister from the same team
+                  const teamIds = Array.from(new Set(match.events.map((e: any) => e.claim_id)));
+
+                  for (const teamId of teamIds) {
+                    const teamGoals = match.events.filter((e: any) => e.claim_id === teamId && e.event_type === 'goal');
+                    const teamAssists = match.events.filter((e: any) => e.claim_id === teamId && e.event_type === 'assist');
+                    const maxCount = Math.max(teamGoals.length, teamAssists.length);
+                    for (let i = 0; i < maxCount; i++) {
+                      const goal = teamGoals[i];
+                      const assist = teamAssists[i];
+                      pairedEvents.push({
+                        id: goal?.id || assist?.id || `${teamId}-${i}`,
+                        goal: goal || null,
+                        assist: assist || null,
+                      });
+                    }
+                  }
+
                   return (
                     <div>
                       <p style={{ fontSize: '0.75rem', fontWeight: '600', letterSpacing: '0.05em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: '10px' }}>Match Events</p>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {goals.map((e: any, i: number) => {
-                          const assist = assists[i]; // best-effort pairing by index
-                          return (
-                            <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
-                              <span style={{ color: '#fff', fontSize: '0.875rem', fontWeight: '600' }}>{e.player?.name || 'Unknown'}</span>
-                              {assist && (
-                                <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.8rem', fontWeight: '500' }}>
-                                  ({assist.player?.name || 'Unknown'})
-                                </span>
-                              )}
-                              <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', fontWeight: '500', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{e.claim?.nations?.name}</span>
-                            </div>
-                          );
+                        {pairedEvents.map(({ id, goal, assist }) => {
+                          if (goal) {
+                            return (
+                              <div key={id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                                <span style={{ color: '#fff', fontSize: '0.875rem', fontWeight: '600' }}>{goal.player?.name || 'Unknown'}</span>
+                                {assist && (
+                                  <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.8rem', fontWeight: '500' }}>
+                                    ({assist.player?.name || 'Unknown'})
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div key={id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(129,140,248,0.7)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3z"/><path d="M12 3c-1.5 2-2.5 5-2.5 9s1 7 2.5 9"/><path d="M12 3c1.5 2 2.5 5 2.5 9s-1 7-2.5 9"/><path d="M3 12h18"/></svg>
+                                <span style={{ color: '#fff', fontSize: '0.875rem', fontWeight: '600' }}>{assist.player?.name || 'Unknown'}</span>
+                              </div>
+                            );
+                          }
                         })}
-                        {assists.slice(goals.length).map((e: any) => (
-                          <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(129,140,248,0.7)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3z"/><path d="M12 3c-1.5 2-2.5 5-2.5 9s1 7 2.5 9"/><path d="M12 3c1.5 2 2.5 5 2.5 9s-1 7-2.5 9"/><path d="M3 12h18"/></svg>
-                            <span style={{ color: '#fff', fontSize: '0.875rem', fontWeight: '600' }}>{e.player?.name || 'Unknown'}</span>
-                            <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', fontWeight: '500', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{e.claim?.nations?.name}</span>
-                          </div>
-                        ))}
                       </div>
                     </div>
                   );

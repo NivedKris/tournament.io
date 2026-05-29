@@ -33,14 +33,14 @@ export async function getActiveTournament(tenantId?: string) {
 }
 
 /** Determine the winner of a verified match. Requires home_score/away_score to be set. */
-function getMatchWinner(match: any): 'home' | 'away' {
+function getMatchWinner(match: any): 'home' | 'away' | 'draw' {
   if ((match.home_score ?? 0) > (match.away_score ?? 0)) return 'home';
   if ((match.away_score ?? 0) > (match.home_score ?? 0)) return 'away';
   // Draw — check penalties (pre_qual / knockout)
   if (match.home_pens != null && match.away_pens != null) {
     return (match.home_pens ?? 0) >= (match.away_pens ?? 0) ? 'home' : 'away';
   }
-  return 'home'; // fallback (shouldn't reach here)
+  return 'draw';
 }
 
 interface StandingRow {

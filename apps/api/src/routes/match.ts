@@ -21,7 +21,7 @@ async function getActiveTournament(tenantId?: string) {
   return completed;
 }
 
-function getMatchWinner(match: any): 'home' | 'away' {
+function getMatchWinner(match: any): 'home' | 'away' | 'draw' {
   const hs = match.home_score ?? 0;
   const as_ = match.away_score ?? 0;
   if (hs > as_) return 'home';
@@ -29,7 +29,7 @@ function getMatchWinner(match: any): 'home' | 'away' {
   if (match.home_pens != null && match.away_pens != null) {
     return (match.home_pens ?? 0) >= (match.away_pens ?? 0) ? 'home' : 'away';
   }
-  return 'home';
+  return 'draw';
 }
 
 /** Full match select with claim/user/nation info */
@@ -59,8 +59,8 @@ export async function resolveAfterVerified(matchId: string, req?: any) {
   if (!match) return;
 
   const winner = getMatchWinner(match);
-  const winner_claim_id = winner === 'home' ? match.home_claim_id : match.away_claim_id;
-  const loser_claim_id  = winner === 'home' ? match.away_claim_id : match.home_claim_id;
+  const winner_claim_id = winner === 'home' ? match.home_claim_id : (winner === 'away' ? match.away_claim_id : null);
+  const loser_claim_id  = winner === 'home' ? match.away_claim_id : (winner === 'away' ? match.home_claim_id : null);
 
   if (match.stage === 'pre_qual') {
     // Find all pre-qual matches for the same nation (both home and away are from same nation)
@@ -140,8 +140,9 @@ async function tryAutoAdvanceKnockout(match: any, winner_claim_id: string) {
 
   if (!siblingMatch || siblingMatch.status !== 'verified') return; // wait for sibling
 
-  const siblingWinner = getMatchWinner(siblingMatch) === 'home'
-    ? siblingMatch.home_claim_id : siblingMatch.away_claim_id;
+  const siblingW = getMatchWinner(siblingMatch);
+  if (siblingW === 'draw') return;
+  const siblingWinner = siblingW === 'home' ? siblingMatch.home_claim_id : siblingMatch.away_claim_id;
 
   // Lower bracket_slot (odd) = home in next match
   const oddSlotWinner  = bracket_slot % 2 === 1 ? winner_claim_id : siblingWinner;
