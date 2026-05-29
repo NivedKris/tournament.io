@@ -905,7 +905,7 @@ export default function MatchPage() {
     if (isMobile) {
       return {
         left: `${6 + coords.x * 0.88}%`,
-        top: `${6 + (100 - coords.y) * 0.38}%`
+        top: `${2.5 + (100 - coords.y) * 0.48}%`
       };
     }
     return {
@@ -919,7 +919,7 @@ export default function MatchPage() {
     if (isMobile) {
       return {
         left: `${6 + coords.x * 0.88}%`,
-        top: `${94 - (100 - coords.y) * 0.38}%`
+        top: `${97.5 - (100 - coords.y) * 0.48}%`
       };
     }
     return {
@@ -1063,26 +1063,27 @@ export default function MatchPage() {
                 <img 
                   src={match.home_claim.nations.flag_url} 
                   alt="" 
+                  className="team-logo"
                   style={{ width: '52px', height: '52px', borderRadius: '12px', objectFit: 'contain', background: 'rgba(0, 0, 0, 0.25)', padding: '4px', boxShadow: '0 4px 15px rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)' }}
                 />
               ) : (
-                <div style={{ width: '52px', height: '52px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', color: 'rgba(255,255,255,0.4)', border: '1.5px dashed rgba(255,255,255,0.1)' }}>?</div>
+                <div className="team-logo" style={{ width: '52px', height: '52px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', color: 'rgba(255,255,255,0.4)', border: '1.5px dashed rgba(255,255,255,0.1)' }}>?</div>
               )}
-              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', marginTop: '12px' }}>
+              <span className="team-name">
                 {match.home_claim?.nations?.name ?? 'TBD'}
               </span>
-              <span style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>
+              <span className="team-username" style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>
                 @{match.home_claim?.users?.username ?? 'tbd'}
               </span>
             </div>
 
             {/* Score Center */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', minWidth: 'fit-content' }}>
               {match.status === 'scheduled' ? (
-                <span style={{ fontSize: '1.75rem', fontWeight: 900, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.05em' }}>VS</span>
+                <span className="score-text-vs" style={{ fontSize: '1.75rem', fontWeight: 900, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.05em' }}>VS</span>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span style={{ fontSize: '2.5rem', fontWeight: 900, color: '#fff', letterSpacing: '0.05em', fontFamily: 'monospace' }}>
+                  <span className="score-text">
                     {match.home_score} – {match.away_score}
                   </span>
                   {match.home_pens !== null && match.away_pens !== null && (
@@ -1113,15 +1114,16 @@ export default function MatchPage() {
                 <img 
                   src={match.away_claim.nations.flag_url} 
                   alt="" 
+                  className="team-logo"
                   style={{ width: '52px', height: '52px', borderRadius: '12px', objectFit: 'contain', background: 'rgba(0, 0, 0, 0.25)', padding: '4px', boxShadow: '0 4px 15px rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)' }}
                 />
               ) : (
-                <div style={{ width: '52px', height: '52px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', color: 'rgba(255,255,255,0.4)', border: '1.5px dashed rgba(255,255,255,0.1)' }}>?</div>
+                <div className="team-logo" style={{ width: '52px', height: '52px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', color: 'rgba(255,255,255,0.4)', border: '1.5px dashed rgba(255,255,255,0.1)' }}>?</div>
               )}
-              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', marginTop: '12px' }}>
+              <span className="team-name">
                 {match.away_claim?.nations?.name ?? 'TBD'}
               </span>
-              <span style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>
+              <span className="team-username" style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>
                 @{match.away_claim?.users?.username ?? 'tbd'}
               </span>
             </div>
@@ -1928,15 +1930,15 @@ export default function MatchPage() {
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             
             {/* Header info */}
-            <div className="tactical-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontWeight: 800, color: '#fff', fontSize: '0.95rem' }}>{match.home_claim?.nations?.name}</span>
-                <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '4px', fontFamily: 'monospace' }}>{homeFormation}</span>
+             <div className="tactical-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                <span className="tactical-team-name">{match.home_claim?.nations?.name}</span>
+                <span className="tactical-formation-badge">{homeFormation}</span>
               </div>
-              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Predicted Lineups</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '4px', fontFamily: 'monospace' }}>{awayFormation}</span>
-                <span style={{ fontWeight: 800, color: '#fff', fontSize: '0.95rem' }}>{match.away_claim?.nations?.name}</span>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', margin: '0 8px' }}>Predicted Lineups</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flexDirection: 'row-reverse' }}>
+                <span className="tactical-team-name" style={{ textAlign: 'right' }}>{match.away_claim?.nations?.name}</span>
+                <span className="tactical-formation-badge">{awayFormation}</span>
               </div>
             </div>
 
@@ -2084,20 +2086,17 @@ export default function MatchPage() {
                 );
               })}
 
-              {/* Coach Footer Panel inside Pitch */}
+              {/* Coach Footer Panel - Rendered under the Pitch to avoid overlaps */}
+              </div>
+
               <div 
                 style={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  background: 'linear-gradient(to top, rgba(10, 15, 30, 0.95) 0%, rgba(10, 15, 30, 0.7) 100%)',
+                  background: 'linear-gradient(to top, rgba(15, 23, 42, 0.98) 0%, rgba(10, 15, 30, 0.95) 100%)',
                   padding: '12px 20px',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  borderTop: '1px solid rgba(255,255,255,0.08)',
-                  zIndex: 20
+                  borderTop: '1px solid rgba(255,255,255,0.08)'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2127,10 +2126,9 @@ export default function MatchPage() {
                 </div>
               </div>
             </div>
-          </div>
 
           {/* Substitutes Grid Section */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '8px' }}>
+            <div className="substitutes-grid" style={{ marginTop: '8px' }}>
               
               {/* Home Substitutes */}
               <div style={{ background: 'rgba(30, 41, 59, 0.2)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '16px' }}>

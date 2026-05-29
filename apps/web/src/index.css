@@ -3806,12 +3806,79 @@ select option:disabled {
   transition: transform 0.2s ease;
 }
 
+.team-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fff;
+  margin-top: 12px;
+}
+
+.score-text {
+  font-size: 2.5rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.05em;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.substitutes-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.tactical-team-name {
+  font-weight: 800;
+  color: #fff;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.tactical-formation-badge {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.05);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .tactical-field-inner {
     height: 680px;
   }
   .player-node {
     transform: translate(-50%, -50%) scale(0.82) !important;
+  }
+  .team-name {
+    font-size: 0.95rem;
+  }
+  .score-text {
+    font-size: 1.85rem;
+  }
+  .team-logo {
+    width: 40px !important;
+    height: 40px !important;
+  }
+  .team-username {
+    font-size: 0.7rem !important;
+  }
+  .substitutes-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .tactical-team-name {
+    font-size: 0.76rem;
+    max-width: 65px;
+  }
+  .tactical-formation-badge {
+    font-size: 0.68rem;
+    padding: 2px 5px;
   }
 }
 
